@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flex — Built to move first</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div class="utilitybar">
+    <div class="wrap utility-wrap">
+      <a href="index.html#contact">Find a Store</a>
+      <a href="index.html#contact">Help</a>
+      <a href="index.html">Join Us</a>
+      <a href="index.html" id="signInLink">Sign In</a>
+    </div>
+  </div>
+  <nav class="wrap">
+    <a class="logo" href="index.html">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M2 22L11 2H22L13 22H2Z" fill="#111111"/>
+        <path d="M14 22L21 7" stroke="#D30005" stroke-width="3"/>
+      </svg>
+      <span>Flex</span>
+    </a>
+    <ul class="navlinks">
+      <li><a href="index.html#shop">New &amp; Featured</a></li>
+      <li class="has-mega">
+        <a href="men.html">Men</a>
+        <div class="megapanel">
+          <div class="mega-col">
+            <h4>Shop by Category</h4>
+            <a href="men.html#tops">Tops</a>
+            <a href="men.html#bottoms">Bottoms</a>
+            <a href="men.html#outerwear">Outerwear</a>
+            <a href="men.html">Shop All Men's</a>
+          </div>
+          <div class="mega-col">
+            <h4>Featured</h4>
+            <a href="men.html#tops">New Arrivals</a>
+            <a href="men.html#outerwear">Bestsellers</a>
+            <a href="index.html#shop">Sale</a>
+          </div>
+          <div class="mega-promo">
+            <div class="swatch-mini"></div>
+            <span>New: Articulated Jacket</span>
+          </div>
+        </div>
+      </li>
+      <li class="has-mega">
+        <a href="women.html">Women</a>
+        <div class="megapanel">
+          <div class="mega-col">
+            <h4>Shop by Category</h4>
+            <a href="women.html#tops">Tops</a>
+            <a href="women.html#bottoms">Bottoms</a>
+            <a href="women.html#outerwear">Outerwear</a>
+            <a href="women.html">Shop All Women's</a>
+          </div>
+          <div class="mega-col">
+            <h4>Featured</h4>
+            <a href="women.html#tops">New Arrivals</a>
+            <a href="women.html#outerwear">Bestsellers</a>
+            <a href="index.html#shop">Sale</a>
+          </div>
+          <div class="mega-promo">
+            <div class="swatch-mini"></div>
+            <span>New: Flex Wrap Jacket</span>
+          </div>
+        </div>
+      </li>
+      <li class="has-mega">
+        <a href="kids.html">Kids</a>
+        <div class="megapanel">
+          <div class="mega-col">
+            <h4>Shop by Category</h4>
+            <a href="kids.html#tops">Tops</a>
+            <a href="kids.html#bottoms">Bottoms</a>
+            <a href="kids.html#outerwear">Outerwear</a>
+            <a href="kids.html">Shop All Kids'</a>
+          </div>
+          <div class="mega-col">
+            <h4>Featured</h4>
+            <a href="kids.html#tops">New Arrivals</a>
+            <a href="kids.html#outerwear">Bestsellers</a>
+            <a href="index.html#shop">Sale</a>
+          </div>
+          <div class="mega-promo">
+            <div class="swatch-mini"></div>
+            <span>New: Mini Motion Tee</span>
+          </div>
+        </div>
+      </li>
+      <li><a href="upcoming.html">Upcoming</a></li>
+      <li><a href="index.html#shop">Sale</a></li>
+    </ul>
+    <label class="searchbox">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="2"/></svg>
+      <input type="search" placeholder="Search" aria-label="Search products">
+    </label>
+    <div class="navicons">
+      <button class="iconbtn" id="accountBtn" aria-label="Account">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <button class="iconbtn" id="cartBtn" aria-label="Cart, 0 items">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M3 4h2l2.4 12.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L21 8H6" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="21" r="1.4" fill="currentColor"/><circle cx="18" cy="21" r="1.4" fill="currentColor"/></svg>
+        <span class="badge" id="cartBadge" hidden>0</span>
+      </button>
+      <button class="navtoggle" id="navToggle" aria-label="Open menu" aria-expanded="false">☰</button>
+    </div>
+  </nav>
+  <div class="promobar">
+    <span>Free Standard Delivery &amp; 30-Day Free Returns</span>
+    <span class="promolinks"><a href="index.html">Join Now</a> <a href="index.html#contact">View Details</a></span>
+  </div>
+</header>
+<main id="top">
+
+  <section class="hero">
+    <div class="wrap">
+      <h1 class="display">Built to<br>move first.</h1>
+      <div class="hero-sub">
+        <p><span class="accent" aria-hidden="true"></span>Four-way stretch fabric and gusseted seams, engineered for a body in motion — not a mannequin standing still.</p>
+        <a class="cta" href="#shop">Shop the collection</a>
+      </div>
+    </div>
+  </section>
+
+  <div class="specbar">
+    <div class="wrap">
+      <span class="spec">4-Way Stretch</span>
+      <span class="spec">Gusseted Seams</span>
+      <span class="spec">Flat-Seam Build</span>
+      <span class="spec">Tested to 10K Reps</span>
+    </div>
+  </div>
+
+  <section class="shop" id="shop">
+    <div class="wrap">
+      <h2 class="display">Shop the collection</h2>
+      <div class="grid">
+        <div class="card"><div class="swatch" style="--swatch-c:var(--red);"></div><h3>Motion Tee</h3><span class="price">$42</span><button class="addcart" data-name="Motion Tee" data-price="42">Add to bag</button></div>
+        <div class="card"><div class="swatch" style="--swatch-c:var(--blue);"><span class="tag">New</span></div><h3>Flex Joggers</h3><span class="price">$78</span><button class="addcart" data-name="Flex Joggers" data-price="78">Add to bag</button></div>
+        <div class="card"><div class="swatch" style="--swatch-c:var(--ink);"></div><h3>Gusset Hoodie</h3><span class="price">$96</span><button class="addcart" data-name="Gusset Hoodie" data-price="96">Add to bag</button></div>
+        <div class="card"><div class="swatch" style="--swatch-c:var(--volt);"><span class="tag volt">Bestseller</span></div><h3>Stretch Shorts</h3><span class="price">$38</span><button class="addcart" data-name="Stretch Shorts" data-price="38">Add to bag</button></div>
+        <div class="card"><div class="swatch" style="--swatch-c:var(--red);"><span class="tag">New</span></div><h3>Articulated Jacket</h3><span class="price">$128</span><button class="addcart" data-name="Articulated Jacket" data-price="128">Add to bag</button></div>
+        <div class="card"><div class="swatch" style="--swatch-c:var(--blue);"></div><h3>Flat-Seam Base Layer</h3><span class="price">$54</span><button class="addcart" data-name="Flat-Seam Base Layer" data-price="54">Add to bag</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="philosophy" id="philosophy">
+    <div class="wrap">
+      <p class="lead">We design from the joint out — shoulders, hips, knees — so the fabric moves before your body has to fight it.</p>
+    </div>
+  </section>
+
+  <section class="principles" id="principles">
+    <div class="wrap">
+      <h2 class="display">How it's made</h2>
+      <div class="principle"><h3>Four-way stretch</h3><p>Every fabric we use stretches on both grains, so a shirt or a pair of trousers moves with a reach or a lunge and returns to shape after.</p></div>
+      <div class="principle"><h3>Gusseted seams</h3><p>Underarms, crotch and knees get an extra panel of fabric at the seam, the same construction used in performance wear, so nothing rips at the stress point.</p></div>
+      <div class="principle"><h3>Articulated cut</h3><p>Sleeves and knees are cut with a slight pre-bend rather than straight, matching the natural resting angle of an arm or a leg.</p></div>
+      <div class="principle"><h3>Flat, low-bulk seams</h3><p>Seams are bonded or flat-felled where they'd otherwise sit under a bag strap or a waistband, so nothing chafes on a long day.</p></div>
+    </div>
+  </section>
+
+  <section class="contact" id="contact">
+    <div class="wrap inner">
+      <div>
+        <h2 class="display">Get in touch</h2>
+        <div class="contact-info">
+          <p>Order questions, sizing help, or a return — the team replies within one business day.</p>
+          <p>Email: <a href="mailto:hello@flex.example">hello@flex.example</a><br>Phone: <a href="tel:+18005553539">1-800-555-FLEX</a></p>
+        </div>
+      </div>
+      <form id="contactForm" novalidate>
+        <div class="field"><label for="cname">Name</label><input id="cname" type="text" required></div>
+        <div class="field"><label for="cemail">Email</label><input id="cemail" type="email" required></div>
+        <div class="field"><label for="cmsg">Message</label><textarea id="cmsg" required></textarea></div>
+        <button class="cta" type="submit">Send message</button>
+        <p class="formmsg" id="contactMsg">Sent. We'll get back to you within a day.</p>
+      </form>
+    </div>
+  </section>
+
+</main>
+<footer>
+  <div class="wrap foot-bottom">
+    <span>© 2026 Flex. All rights reserved.</span>
+    <span>Built to move.</span>
+  </div>
+</footer>
+<div class="overlay" id="overlay"></div>
+<div class="modal" id="accountModal" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
+  <button class="closebtn" id="closeAccount" aria-label="Close">✕</button>
+  <h2 id="accountTitle">Account</h2>
+  <div class="tabs">
+    <button class="tab active" id="tabLogin">Log in</button>
+    <button class="tab" id="tabRegister">Create account</button>
+  </div>
+  <form class="authform active" id="loginForm">
+    <div class="field"><label for="lemail">Email</label><input id="lemail" type="email" required></div>
+    <div class="field"><label for="lpass">Password</label><input id="lpass" type="password" required></div>
+    <button class="cta dark" type="submit" style="width:100%;text-align:center;">Log in</button>
+    <p class="formmsg" id="loginMsg">Logged in.</p>
+  </form>
+  <form class="authform" id="registerForm">
+    <div class="field"><label for="rname">Name</label><input id="rname" type="text" required></div>
+    <div class="field"><label for="remail">Email</label><input id="remail" type="email" required></div>
+    <div class="field"><label for="rpass">Password</label><input id="rpass" type="password" required></div>
+    <button class="cta dark" type="submit" style="width:100%;text-align:center;">Create account</button>
+    <p class="formmsg" id="registerMsg">Account created.</p>
+  </form>
+</div>
+
+<div class="drawer" id="cartDrawer" role="dialog" aria-modal="true" aria-labelledby="cartTitle">
+  <div class="drawer-head">
+    <h2 id="cartTitle">Your bag</h2>
+    <button class="closebtn" id="closeCart" aria-label="Close" style="position:static;">✕</button>
+  </div>
+  <div class="cart-items" id="cartItems"><p class="cart-empty">Your bag is empty.</p></div>
+  <div class="drawer-foot">
+    <div class="subtotal"><span>Subtotal</span><span id="cartSubtotal">$0</span></div>
+    <button class="cta dark" id="checkoutBtn" style="width:100%;text-align:center;">Checkout</button>
+  </div>
+</div>
+<script src="script.js"></script>
+</body>
+</html>

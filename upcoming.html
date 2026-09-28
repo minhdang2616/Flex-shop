@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Upcoming Drops — Flex</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div class="utilitybar">
+    <div class="wrap utility-wrap">
+      <a href="index.html#contact">Find a Store</a>
+      <a href="index.html#contact">Help</a>
+      <a href="index.html">Join Us</a>
+      <a href="index.html" id="signInLink">Sign In</a>
+    </div>
+  </div>
+  <nav class="wrap">
+    <a class="logo" href="index.html">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M2 22L11 2H22L13 22H2Z" fill="#111111"/>
+        <path d="M14 22L21 7" stroke="#D30005" stroke-width="3"/>
+      </svg>
+      <span>Flex</span>
+    </a>
+    <ul class="navlinks">
+      <li><a href="index.html#shop">New &amp; Featured</a></li>
+      <li class="has-mega">
+        <a href="men.html">Men</a>
+        <div class="megapanel">
+          <div class="mega-col">
+            <h4>Shop by Category</h4>
+            <a href="men.html#tops">Tops</a>
+            <a href="men.html#bottoms">Bottoms</a>
+            <a href="men.html#outerwear">Outerwear</a>
+            <a href="men.html">Shop All Men's</a>
+          </div>
+          <div class="mega-col">
+            <h4>Featured</h4>
+            <a href="men.html#tops">New Arrivals</a>
+            <a href="men.html#outerwear">Bestsellers</a>
+            <a href="index.html#shop">Sale</a>
+          </div>
+          <div class="mega-promo">
+            <div class="swatch-mini"></div>
+            <span>New: Articulated Jacket</span>
+          </div>
+        </div>
+      </li>
+      <li class="has-mega">
+        <a href="women.html">Women</a>
+        <div class="megapanel">
+          <div class="mega-col">
+            <h4>Shop by Category</h4>
+            <a href="women.html#tops">Tops</a>
+            <a href="women.html#bottoms">Bottoms</a>
+            <a href="women.html#outerwear">Outerwear</a>
+            <a href="women.html">Shop All Women's</a>
+          </div>
+          <div class="mega-col">
+            <h4>Featured</h4>
+            <a href="women.html#tops">New Arrivals</a>
+            <a href="women.html#outerwear">Bestsellers</a>
+            <a href="index.html#shop">Sale</a>
+          </div>
+          <div class="mega-promo">
+            <div class="swatch-mini"></div>
+            <span>New: Flex Wrap Jacket</span>
+          </div>
+        </div>
+      </li>
+      <li class="has-mega">
+        <a href="kids.html">Kids</a>
+        <div class="megapanel">
+          <div class="mega-col">
+            <h4>Shop by Category</h4>
+            <a href="kids.html#tops">Tops</a>
+            <a href="kids.html#bottoms">Bottoms</a>
+            <a href="kids.html#outerwear">Outerwear</a>
+            <a href="kids.html">Shop All Kids'</a>
+          </div>
+          <div class="mega-col">
+            <h4>Featured</h4>
+            <a href="kids.html#tops">New Arrivals</a>
+            <a href="kids.html#outerwear">Bestsellers</a>
+            <a href="index.html#shop">Sale</a>
+          </div>
+          <div class="mega-promo">
+            <div class="swatch-mini"></div>
+            <span>New: Mini Motion Tee</span>
+          </div>
+        </div>
+      </li>
+      <li><a href="upcoming.html">Upcoming</a></li>
+      <li><a href="index.html#shop">Sale</a></li>
+    </ul>
+    <label class="searchbox">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="2"/></svg>
+      <input type="search" placeholder="Search" aria-label="Search products">
+    </label>
+    <div class="navicons">
+      <button class="iconbtn" id="accountBtn" aria-label="Account">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <button class="iconbtn" id="cartBtn" aria-label="Cart, 0 items">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M3 4h2l2.4 12.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L21 8H6" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="21" r="1.4" fill="currentColor"/><circle cx="18" cy="21" r="1.4" fill="currentColor"/></svg>
+        <span class="badge" id="cartBadge" hidden>0</span>
+      </button>
+      <button class="navtoggle" id="navToggle" aria-label="Open menu" aria-expanded="false">☰</button>
+    </div>
+  </nav>
+  <div class="promobar">
+    <span>Free Standard Delivery &amp; 30-Day Free Returns</span>
+    <span class="promolinks"><a href="index.html">Join Now</a> <a href="index.html#contact">View Details</a></span>
+  </div>
+</header>
+<main id="top">
+  <section class="pagehero upcoming">
+    <div class="wrap">
+      <p class="crumbs"><a href="index.html">Home</a> / Upcoming</p>
+      <h1 class="display">Upcoming drops.</h1>
+      <p>What's coming next, and when. Get notified the morning it lands.</p>
+    </div>
+  </section>
+
+  <div class="dropgrid wrap">
+    <div class="dropcard">
+      <div class="swatch" style="--swatch-c:var(--red);"></div>
+      <span class="dropdate">Drops Oct 14</span>
+      <h3>All-Weather Shell</h3>
+      <p>A taped-seam shell built over the Articulated Jacket pattern, sized for layering.</p>
+      <button class="notifybtn">Notify me</button>
+    </div>
+    <div class="dropcard">
+      <div class="swatch" style="--swatch-c:var(--blue);"></div>
+      <span class="dropdate">Drops Oct 28</span>
+      <h3>Flex Knit Trainer</h3>
+      <p>Our first footwear piece: a knit upper on a flexible sole built for lateral movement.</p>
+      <button class="notifybtn">Notify me</button>
+    </div>
+    <div class="dropcard">
+      <div class="swatch" style="--swatch-c:var(--volt);"></div>
+      <span class="dropdate">Drops Nov 11</span>
+      <h3>Recovery Jogger 2.0</h3>
+      <p>A softer, brushed-back version of the Flex Joggers for rest days and travel.</p>
+      <button class="notifybtn">Notify me</button>
+    </div>
+    <div class="dropcard">
+      <div class="swatch" style="--swatch-c:var(--ink);"></div>
+      <span class="dropdate">Drops Dec 2</span>
+      <h3>Kids' Flex Collection</h3>
+      <p>An expanded Kids' line — tops, bottoms and a packable shell in three new colors.</p>
+      <button class="notifybtn">Notify me</button>
+    </div>
+  </div>
+</main>
+<footer>
+  <div class="wrap foot-bottom">
+    <span>© 2026 Flex. All rights reserved.</span>
+    <span>Built to move.</span>
+  </div>
+</footer>
+<div class="overlay" id="overlay"></div>
+<div class="modal" id="accountModal" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
+  <button class="closebtn" id="closeAccount" aria-label="Close">✕</button>
+  <h2 id="accountTitle">Account</h2>
+  <div class="tabs">
+    <button class="tab active" id="tabLogin">Log in</button>
+    <button class="tab" id="tabRegister">Create account</button>
+  </div>
+  <form class="authform active" id="loginForm">
+    <div class="field"><label for="lemail">Email</label><input id="lemail" type="email" required></div>
+    <div class="field"><label for="lpass">Password</label><input id="lpass" type="password" required></div>
+    <button class="cta dark" type="submit" style="width:100%;text-align:center;">Log in</button>
+    <p class="formmsg" id="loginMsg">Logged in.</p>
+  </form>
+  <form class="authform" id="registerForm">
+    <div class="field"><label for="rname">Name</label><input id="rname" type="text" required></div>
+    <div class="field"><label for="remail">Email</label><input id="remail" type="email" required></div>
+    <div class="field"><label for="rpass">Password</label><input id="rpass" type="password" required></div>
+    <button class="cta dark" type="submit" style="width:100%;text-align:center;">Create account</button>
+    <p class="formmsg" id="registerMsg">Account created.</p>
+  </form>
+</div>
+
+<div class="drawer" id="cartDrawer" role="dialog" aria-modal="true" aria-labelledby="cartTitle">
+  <div class="drawer-head">
+    <h2 id="cartTitle">Your bag</h2>
+    <button class="closebtn" id="closeCart" aria-label="Close" style="position:static;">✕</button>
+  </div>
+  <div class="cart-items" id="cartItems"><p class="cart-empty">Your bag is empty.</p></div>
+  <div class="drawer-foot">
+    <div class="subtotal"><span>Subtotal</span><span id="cartSubtotal">$0</span></div>
+    <button class="cta dark" id="checkoutBtn" style="width:100%;text-align:center;">Checkout</button>
+  </div>
+</div>
+<script src="script.js"></script>
+</body>
+</html>
