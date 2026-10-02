@@ -130,30 +130,21 @@
   <section class="catgroup" id="tops">
     <div class="wrap">
       <h2 class="display">Tops</h2>
-      <div class="grid">
-        <div class="card"><div class="swatch" style="--swatch-c:var(--red);"><span class="tag">New</span></div><h3>Men's Motion Tee</h3><span class="price">$42</span><button class="addcart" data-name="Men's Motion Tee" data-price="42">Add to bag</button></div>
-        <div class="card"><div class="swatch" style="--swatch-c:var(--ink);"></div><h3>Men's Gusset Hoodie</h3><span class="price">$96</span><button class="addcart" data-name="Men's Gusset Hoodie" data-price="96">Add to bag</button></div>
-        <div class="card"><div class="swatch" style="--swatch-c:var(--blue);"></div><h3>Men's Base Layer</h3><span class="price">$54</span><button class="addcart" data-name="Men's Base Layer" data-price="54">Add to bag</button></div>
-      </div>
+      <div class="grid" data-department="Men" data-category="Tops"></div>
     </div>
   </section>
 
   <section class="catgroup" id="bottoms">
     <div class="wrap">
       <h2 class="display">Bottoms</h2>
-      <div class="grid">
-        <div class="card"><div class="swatch" style="--swatch-c:var(--blue);"><span class="tag volt">Bestseller</span></div><h3>Men's Flex Joggers</h3><span class="price">$78</span><button class="addcart" data-name="Men's Flex Joggers" data-price="78">Add to bag</button></div>
-        <div class="card"><div class="swatch" style="--swatch-c:var(--volt);"></div><h3>Men's Stretch Shorts</h3><span class="price">$38</span><button class="addcart" data-name="Men's Stretch Shorts" data-price="38">Add to bag</button></div>
-      </div>
+      <div class="grid" data-department="Men" data-category="Bottoms"></div>
     </div>
   </section>
 
   <section class="catgroup" id="outerwear" style="border-bottom:none;">
     <div class="wrap">
       <h2 class="display">Outerwear</h2>
-      <div class="grid">
-        <div class="card"><div class="swatch" style="--swatch-c:var(--red);"><span class="tag">New</span></div><h3>Men's Articulated Jacket</h3><span class="price">$128</span><button class="addcart" data-name="Men's Articulated Jacket" data-price="128">Add to bag</button></div>
-      </div>
+      <div class="grid" data-department="Men" data-category="Outerwear"></div>
     </div>
   </section>
 </main>
@@ -167,23 +158,29 @@
 <div class="modal" id="accountModal" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
   <button class="closebtn" id="closeAccount" aria-label="Close">✕</button>
   <h2 id="accountTitle">Account</h2>
+  <div id="accountInfo" hidden>
+    <p id="accountHello"></p>
+    <button class="cta dark" id="logoutBtn" type="button">Sign out</button>
+  </div>
+  <div id="authPanel">
   <div class="tabs">
     <button class="tab active" id="tabLogin">Log in</button>
     <button class="tab" id="tabRegister">Create account</button>
   </div>
   <form class="authform active" id="loginForm">
     <div class="field"><label for="lemail">Email</label><input id="lemail" type="email" required></div>
-    <div class="field"><label for="lpass">Password</label><input id="lpass" type="password" required></div>
+    <div class="field"><label for="lpass">Password</label><input id="lpass" type="password" autocomplete="current-password" required></div>
     <button class="cta dark" type="submit" style="width:100%;text-align:center;">Log in</button>
-    <p class="formmsg" id="loginMsg">Logged in.</p>
+    <p class="formmsg" id="loginMsg" role="alert"></p>
   </form>
   <form class="authform" id="registerForm">
     <div class="field"><label for="rname">Name</label><input id="rname" type="text" required></div>
     <div class="field"><label for="remail">Email</label><input id="remail" type="email" required></div>
-    <div class="field"><label for="rpass">Password</label><input id="rpass" type="password" required></div>
+    <div class="field"><label for="rpass">Password</label><input id="rpass" type="password" minlength="8" autocomplete="new-password" required></div>
     <button class="cta dark" type="submit" style="width:100%;text-align:center;">Create account</button>
-    <p class="formmsg" id="registerMsg">Account created.</p>
+    <p class="formmsg" id="registerMsg" role="alert"></p>
   </form>
+  </div>
 </div>
 
 <div class="drawer" id="cartDrawer" role="dialog" aria-modal="true" aria-labelledby="cartTitle">

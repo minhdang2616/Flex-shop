@@ -39,6 +39,19 @@ CREATE TABLE IF NOT EXISTS products (
 );
 CREATE INDEX IF NOT EXISTS idx_products_browse ON products(status, department, category);
 
+-- One row per photo. position 0 is the cover shown on product cards; higher positions are gallery order.
+CREATE TABLE IF NOT EXISTS product_images (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  url        TEXT NOT NULL CHECK (url LIKE 'https://%'),
+  alt_text   TEXT NOT NULL DEFAULT '',
+  position   INTEGER NOT NULL DEFAULT 0,
+  width      INTEGER,
+  height     INTEGER,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_images_product ON product_images(product_id, position);
+
 CREATE TABLE IF NOT EXISTS orders (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   order_no    TEXT NOT NULL UNIQUE,

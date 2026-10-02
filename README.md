@@ -34,6 +34,14 @@ npx wrangler pages secret delete SETUP_TOKEN --project-name flex
 
 Sign in at `https://flex.pages.dev/admin.html`. Create staff/admin/customer accounts from **Users**.
 
+## Already deployed? Add the product_images table
+
+If you deployed before this version, run the one new migration against your live database (safe to run more than once):
+
+```bash
+npx wrangler d1 execute flex-db --remote --file=migrations/0002_product_images.sql
+```
+
 ## Run locally
 
 ```bash
@@ -55,10 +63,28 @@ that emulates the D1 interface: auth, lockout, roles, checkout/stock/rollback, c
 |---|---|---|
 | Accounts, roles, credentials | `users`, `sessions` | Users: create, edit role/status, reset password, delete |
 | Inventory | `products` | Products: price, stock, status, department, featured |
+| Product photos | `product_images` | Products → **Images**: add by URL, set cover photo, delete (12 per product max) |
 | Orders | `orders`, `order_items` | Orders: view, change status (cancel restocks) |
 | Upcoming drops + notify list | `drops`, `drop_subscribers` | Upcoming drops |
 | Contact form | `messages` | Messages |
 | Who changed what | `audit_log` | Activity log (admin only) |
+
+## Bulk-adding product photos
+
+`product_images` stores an `https://` URL per photo, not the file itself, so each image needs to be hosted
+somewhere first — [Cloudflare R2](https://developers.cloudflare.com/r2/) (works well alongside Pages/D1),
+Cloudflare Images, or any CDN you already use. Uploading files from the admin UI isn't built yet; add images by
+URL under Products → **Images**, or load many at once with SQL, e.g. from a product photo dataset:
+
+```sql
+INSERT INTO product_images (product_id, url, alt_text, position, created_at) VALUES
+  (1, 'https://img.yoursite.com/1-front.jpg', 'Motion Tee, front view', 0, strftime('%s','now')),
+  (1, 'https://img.yoursite.com/1-back.jpg',  'Motion Tee, back view',  1, strftime('%s','now'));
+```
+
+Run it with `npx wrangler d1 execute flex-db --remote --file=your-import.sql`. Match `product_id` to the
+`id` already in your `products` table (check with `SELECT id, sku, name FROM products`), and keep `position`
+increasing per product — position `0` becomes the cover photo shown on the storefront.
 
 ## Security model
 

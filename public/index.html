@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Upcoming Drops — Flex</title>
+<title>Flex — Built to move first</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -119,44 +119,68 @@
   </div>
 </header>
 <main id="top">
-  <section class="pagehero upcoming">
+
+  <section class="hero">
     <div class="wrap">
-      <p class="crumbs"><a href="index.html">Home</a> / Upcoming</p>
-      <h1 class="display">Upcoming drops.</h1>
-      <p>What's coming next, and when. Get notified the morning it lands.</p>
+      <h1 class="display">Built to<br>move first.</h1>
+      <div class="hero-sub">
+        <p><span class="accent" aria-hidden="true"></span>Four-way stretch fabric and gusseted seams, engineered for a body in motion — not a mannequin standing still.</p>
+        <a class="cta" href="#shop">Shop the collection</a>
+      </div>
     </div>
   </section>
 
-  <div class="dropgrid wrap">
-    <div class="dropcard">
-      <div class="swatch" style="--swatch-c:var(--red);"></div>
-      <span class="dropdate">Drops Oct 14</span>
-      <h3>All-Weather Shell</h3>
-      <p>A taped-seam shell built over the Articulated Jacket pattern, sized for layering.</p>
-      <button class="notifybtn">Notify me</button>
-    </div>
-    <div class="dropcard">
-      <div class="swatch" style="--swatch-c:var(--blue);"></div>
-      <span class="dropdate">Drops Oct 28</span>
-      <h3>Flex Knit Trainer</h3>
-      <p>Our first footwear piece: a knit upper on a flexible sole built for lateral movement.</p>
-      <button class="notifybtn">Notify me</button>
-    </div>
-    <div class="dropcard">
-      <div class="swatch" style="--swatch-c:var(--volt);"></div>
-      <span class="dropdate">Drops Nov 11</span>
-      <h3>Recovery Jogger 2.0</h3>
-      <p>A softer, brushed-back version of the Flex Joggers for rest days and travel.</p>
-      <button class="notifybtn">Notify me</button>
-    </div>
-    <div class="dropcard">
-      <div class="swatch" style="--swatch-c:var(--ink);"></div>
-      <span class="dropdate">Drops Dec 2</span>
-      <h3>Kids' Flex Collection</h3>
-      <p>An expanded Kids' line — tops, bottoms and a packable shell in three new colors.</p>
-      <button class="notifybtn">Notify me</button>
+  <div class="specbar">
+    <div class="wrap">
+      <span class="spec">4-Way Stretch</span>
+      <span class="spec">Gusseted Seams</span>
+      <span class="spec">Flat-Seam Build</span>
+      <span class="spec">Tested to 10K Reps</span>
     </div>
   </div>
+
+  <section class="shop" id="shop">
+    <div class="wrap">
+      <h2 class="display">Shop the collection</h2>
+      <div class="grid" data-featured="1"></div>
+    </div>
+  </section>
+
+  <section class="philosophy" id="philosophy">
+    <div class="wrap">
+      <p class="lead">We design from the joint out — shoulders, hips, knees — so the fabric moves before your body has to fight it.</p>
+    </div>
+  </section>
+
+  <section class="principles" id="principles">
+    <div class="wrap">
+      <h2 class="display">How it's made</h2>
+      <div class="principle"><h3>Four-way stretch</h3><p>Every fabric we use stretches on both grains, so a shirt or a pair of trousers moves with a reach or a lunge and returns to shape after.</p></div>
+      <div class="principle"><h3>Gusseted seams</h3><p>Underarms, crotch and knees get an extra panel of fabric at the seam, the same construction used in performance wear, so nothing rips at the stress point.</p></div>
+      <div class="principle"><h3>Articulated cut</h3><p>Sleeves and knees are cut with a slight pre-bend rather than straight, matching the natural resting angle of an arm or a leg.</p></div>
+      <div class="principle"><h3>Flat, low-bulk seams</h3><p>Seams are bonded or flat-felled where they'd otherwise sit under a bag strap or a waistband, so nothing chafes on a long day.</p></div>
+    </div>
+  </section>
+
+  <section class="contact" id="contact">
+    <div class="wrap inner">
+      <div>
+        <h2 class="display">Get in touch</h2>
+        <div class="contact-info">
+          <p>Order questions, sizing help, or a return — the team replies within one business day.</p>
+          <p>Email: <a href="mailto:hello@flex.example">hello@flex.example</a><br>Phone: <a href="tel:+18005553539">1-800-555-FLEX</a></p>
+        </div>
+      </div>
+      <form id="contactForm" novalidate>
+        <div class="field"><label for="cname">Name</label><input id="cname" type="text" required></div>
+        <div class="field"><label for="cemail">Email</label><input id="cemail" type="email" required></div>
+        <div class="field"><label for="cmsg">Message</label><textarea id="cmsg" required></textarea></div>
+        <button class="cta" type="submit">Send message</button>
+        <p class="formmsg" id="contactMsg" role="status"></p>
+      </form>
+    </div>
+  </section>
+
 </main>
 <footer>
   <div class="wrap foot-bottom">
@@ -168,23 +192,29 @@
 <div class="modal" id="accountModal" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
   <button class="closebtn" id="closeAccount" aria-label="Close">✕</button>
   <h2 id="accountTitle">Account</h2>
+  <div id="accountInfo" hidden>
+    <p id="accountHello"></p>
+    <button class="cta dark" id="logoutBtn" type="button">Sign out</button>
+  </div>
+  <div id="authPanel">
   <div class="tabs">
     <button class="tab active" id="tabLogin">Log in</button>
     <button class="tab" id="tabRegister">Create account</button>
   </div>
   <form class="authform active" id="loginForm">
     <div class="field"><label for="lemail">Email</label><input id="lemail" type="email" required></div>
-    <div class="field"><label for="lpass">Password</label><input id="lpass" type="password" required></div>
+    <div class="field"><label for="lpass">Password</label><input id="lpass" type="password" autocomplete="current-password" required></div>
     <button class="cta dark" type="submit" style="width:100%;text-align:center;">Log in</button>
-    <p class="formmsg" id="loginMsg">Logged in.</p>
+    <p class="formmsg" id="loginMsg" role="alert"></p>
   </form>
   <form class="authform" id="registerForm">
     <div class="field"><label for="rname">Name</label><input id="rname" type="text" required></div>
     <div class="field"><label for="remail">Email</label><input id="remail" type="email" required></div>
-    <div class="field"><label for="rpass">Password</label><input id="rpass" type="password" required></div>
+    <div class="field"><label for="rpass">Password</label><input id="rpass" type="password" minlength="8" autocomplete="new-password" required></div>
     <button class="cta dark" type="submit" style="width:100%;text-align:center;">Create account</button>
-    <p class="formmsg" id="registerMsg">Account created.</p>
+    <p class="formmsg" id="registerMsg" role="alert"></p>
   </form>
+  </div>
 </div>
 
 <div class="drawer" id="cartDrawer" role="dialog" aria-modal="true" aria-labelledby="cartTitle">

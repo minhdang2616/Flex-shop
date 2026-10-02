@@ -70,6 +70,10 @@ function password(v) {
   if (typeof v !== 'string' || v.length < 8 || v.length > 128) throw bad('Password must be 8-128 characters');
   return v;
 }
+function adminPassword(v) {
+  if (typeof v !== 'string' || v.length < 12) throw bad('Admin passwords must be at least 12 characters');
+  return password(v);
+}
 function oneOf(v, list, name) {
   if (!list.includes(v)) throw bad(`${name} must be one of: ${list.join(', ') || '(empty)'}`);
   return v;
@@ -134,7 +138,7 @@ async function setup({ env, request }) {
   const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").first();
   if (n > 0) throw new HttpError(409, 'An admin already exists');
   const r = await env.DB.prepare('INSERT INTO users (email, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)')
-    .bind(email(b.email), str(b.name, 'Name', 1, 100), await hashPassword(password(b.password)), 'admin', now()).run();
+    .bind(email(b.email), str(b.name, 'Name', 1, 100), await hashPassword(adminPassword(b.password)), 'admin', now()).run();
   await audit(env, { id: r.meta.last_row_id, email: b.email }, 'setup.admin_created');
   return json({ ok: true });
 }
@@ -153,22 +157,32 @@ async function register({ env, request }) {
   }
 }
 
-async function login({ env, request }) {
-  const b = await body(request);
-  const e = email(b.email);
-  const pw = typeof b.password === 'string' ? b.password.slice(0, 128) : '';
-  const u = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(e).first();
-  if (!u) { await verifyPassword(pw, DUMMY_HASH); throw new HttpError(401, 'Invalid email or password'); }
+// Checks a password against one user row, with lockout, then starts a session.
+async function authenticate(env, u, pw, failMessage) {
+  if (!u) { await verifyPassword(pw, DUMMY_HASH); throw new HttpError(401, failMessage); }
   if (u.locked_until > now()) throw new HttpError(429, 'Too many failed attempts. Try again in a few minutes.');
   if (!(await verifyPassword(pw, u.password_hash))) {
     const fails = u.failed_attempts + 1;
     await env.DB.prepare('UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?')
       .bind(fails >= MAX_FAILS ? 0 : fails, fails >= MAX_FAILS ? now() + LOCK_SECONDS : 0, u.id).run();
-    throw new HttpError(401, 'Invalid email or password');
+    throw new HttpError(401, failMessage);
   }
   if (u.status !== 'active') throw new HttpError(403, 'This account is disabled');
   await env.DB.prepare('UPDATE users SET failed_attempts = 0, locked_until = 0, last_login_at = ? WHERE id = ?').bind(now(), u.id).run();
   return json({ user: publicUser(u) }, 200, { 'Set-Cookie': await startSession(env, u) });
+}
+
+async function login({ env, request }) {
+  const b = await body(request);
+  const u = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(email(b.email)).first();
+  return authenticate(env, u, typeof b.password === 'string' ? b.password.slice(0, 128) : '', 'Invalid email or password');
+}
+
+// Single-admin sign-in: only a password. It always targets the first (oldest) active admin account.
+async function adminLogin({ env, request }) {
+  const b = await body(request);
+  const u = await env.DB.prepare("SELECT * FROM users WHERE role = 'admin' AND status = 'active' ORDER BY id LIMIT 1").first();
+  return authenticate(env, u, typeof b.password === 'string' ? b.password.slice(0, 128) : '', 'Incorrect password');
 }
 
 async function logout({ env, request }) {
@@ -180,14 +194,27 @@ async function logout({ env, request }) {
 const me = async ({ user }) => json({ user: user ? publicUser(user) : null });
 
 async function listProducts({ env, url }) {
-  let sql = "SELECT id, name, department, category, price_cents, stock, tag, color FROM products WHERE status = 'active'";
+  let sql = `SELECT p.id, p.name, p.department, p.category, p.price_cents, p.stock, p.tag, p.color,
+    (SELECT url FROM product_images WHERE product_id = p.id ORDER BY position, id LIMIT 1) AS image_url
+    FROM products p WHERE p.status = 'active'`;
   const binds = [];
   const dep = url.searchParams.get('department'), cat = url.searchParams.get('category');
-  if (DEPTS.includes(dep)) { sql += ' AND department = ?'; binds.push(dep); }
-  if (CATS.includes(cat)) { sql += ' AND category = ?'; binds.push(cat); }
-  if (url.searchParams.get('featured') === '1') sql += ' AND featured = 1';
-  const { results } = await env.DB.prepare(sql + ' ORDER BY id').bind(...binds).all();
+  if (DEPTS.includes(dep)) { sql += ' AND p.department = ?'; binds.push(dep); }
+  if (CATS.includes(cat)) { sql += ' AND p.category = ?'; binds.push(cat); }
+  if (url.searchParams.get('featured') === '1') sql += ' AND p.featured = 1';
+  const { results } = await env.DB.prepare(sql + ' ORDER BY p.id').bind(...binds).all();
   return json({ products: results });
+}
+
+// Public product page: full detail plus the ordered image gallery.
+async function productDetail({ env, params }) {
+  const id = Number(params.id);
+  const product = await env.DB.prepare(
+    "SELECT id, name, department, category, price_cents, stock, tag, color FROM products WHERE id = ? AND status = 'active'"
+  ).bind(id).first();
+  if (!product) throw new HttpError(404, 'Product not found');
+  const { results } = await env.DB.prepare('SELECT id, url, alt_text, position FROM product_images WHERE product_id = ? ORDER BY position, id').bind(id).all();
+  return json({ product, images: results });
 }
 
 async function listDropsPublic({ env }) {
@@ -283,7 +310,10 @@ function productFields(b) {
   };
 }
 async function adminProducts({ env }) {
-  const { results } = await env.DB.prepare('SELECT * FROM products ORDER BY id DESC').all();
+  const { results } = await env.DB.prepare(`SELECT p.*,
+    (SELECT url FROM product_images WHERE product_id = p.id ORDER BY position, id LIMIT 1) AS image_url,
+    (SELECT COUNT(*) FROM product_images WHERE product_id = p.id) AS image_count
+    FROM products p ORDER BY p.id DESC`).all();
   return json({ products: results });
 }
 async function createProduct({ env, request, user }) {
@@ -309,8 +339,66 @@ async function deleteProduct({ env, user, params }) {
   const id = Number(params.id);
   const p = await env.DB.prepare('SELECT name FROM products WHERE id = ?').bind(id).first();
   if (!p) throw new HttpError(404, 'Product not found');
-  await env.DB.prepare('DELETE FROM products WHERE id = ?').bind(id).run();
+  await env.DB.prepare('DELETE FROM products WHERE id = ?').bind(id).run();   // product_images cascade-delete with it
   await audit(env, user, 'product.delete', `#${id} ${p.name}`);
+  return json({ ok: true });
+}
+
+// ---------- product images ("cloth img") ----------
+function imageUrl(v) {
+  const s = str(v, 'Image URL', 8, 2000);
+  if (!/^https:\/\//i.test(s)) throw bad('Image URL must start with https://');
+  return s;
+}
+async function listProductImages({ env, params }) {
+  const productId = Number(params.id);
+  const product = await env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(productId).first();
+  if (!product) throw new HttpError(404, 'Product not found');
+  const { results } = await env.DB.prepare('SELECT * FROM product_images WHERE product_id = ? ORDER BY position, id').bind(productId).all();
+  return json({ images: results });
+}
+async function addProductImage({ env, request, user, params }) {
+  const productId = Number(params.id);
+  const product = await env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(productId).first();
+  if (!product) throw new HttpError(404, 'Product not found');
+  const b = await body(request);
+  const url = imageUrl(b.url), alt = str(b.altText ?? '', 'Alt text', 0, 200);
+  const { count } = await env.DB.prepare('SELECT COUNT(*) AS count FROM product_images WHERE product_id = ?').bind(productId).first();
+  if (count >= 12) throw bad('A product can have at most 12 images');
+  const position = Number.isInteger(b.position) ? int(b.position, 'Position', 0, 999) : count;
+  const width = b.width != null ? int(b.width, 'Width', 1, 20000) : null;
+  const height = b.height != null ? int(b.height, 'Height', 1, 20000) : null;
+  const r = await env.DB.prepare('INSERT INTO product_images (product_id, url, alt_text, position, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(productId, url, alt, position, width, height, now()).run();
+  await audit(env, user, 'product.image_add', `product #${productId}`);
+  return json({ image: await env.DB.prepare('SELECT * FROM product_images WHERE id = ?').bind(r.meta.last_row_id).first() }, 201);
+}
+async function updateProductImage({ env, request, user, params }) {
+  const id = Number(params.id);
+  const existing = await env.DB.prepare('SELECT product_id FROM product_images WHERE id = ?').bind(id).first();
+  if (!existing) throw new HttpError(404, 'Image not found');
+  const b = await body(request);
+  const alt = str(b.altText ?? '', 'Alt text', 0, 200), position = int(b.position, 'Position', 0, 999);
+  await env.DB.prepare('UPDATE product_images SET alt_text = ?, position = ? WHERE id = ?').bind(alt, position, id).run();
+  await audit(env, user, 'product.image_update', `product #${existing.product_id} image #${id}`);
+  return json({ ok: true });
+}
+async function setCoverImage({ env, user, params }) {
+  const id = Number(params.id);
+  const target = await env.DB.prepare('SELECT product_id FROM product_images WHERE id = ?').bind(id).first();
+  if (!target) throw new HttpError(404, 'Image not found');
+  const { results } = await env.DB.prepare('SELECT id FROM product_images WHERE product_id = ? ORDER BY position, id').bind(target.product_id).all();
+  const ordered = [id, ...results.map((r) => r.id).filter((x) => x !== id)];
+  await env.DB.batch(ordered.map((imgId, i) => env.DB.prepare('UPDATE product_images SET position = ? WHERE id = ?').bind(i, imgId)));
+  await audit(env, user, 'product.image_cover', `product #${target.product_id} image #${id}`);
+  return json({ ok: true });
+}
+async function deleteProductImage({ env, user, params }) {
+  const id = Number(params.id);
+  const img = await env.DB.prepare('SELECT product_id FROM product_images WHERE id = ?').bind(id).first();
+  if (!img) throw new HttpError(404, 'Image not found');
+  await env.DB.prepare('DELETE FROM product_images WHERE id = ?').bind(id).run();
+  await audit(env, user, 'product.image_delete', `product #${img.product_id} image #${id}`);
   return json({ ok: true });
 }
 
@@ -390,7 +478,7 @@ async function adminUsers({ env }) {
 async function createUser({ env, request, user }) {
   const b = await body(request);
   const e = email(b.email), name = str(b.name, 'Name', 1, 100), role = oneOf(b.role ?? 'customer', ['customer', 'staff', 'admin'], 'Role');
-  const hash = await hashPassword(password(b.password));
+  const hash = await hashPassword(role === 'admin' ? adminPassword(b.password) : password(b.password));
   try {
     await env.DB.prepare('INSERT INTO users (email, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)').bind(e, name, hash, role, now()).run();
   } catch (err) { if (isUnique(err)) throw new HttpError(409, 'That email is already registered'); throw err; }
@@ -410,9 +498,10 @@ async function updateUser({ env, request, user, params }) {
   return json({ ok: true });
 }
 async function resetPassword({ env, request, user, params }) {
-  const id = Number(params.id), hash = await hashPassword(password((await body(request)).password));
-  const target = await env.DB.prepare('SELECT email FROM users WHERE id = ?').bind(id).first();
+  const id = Number(params.id), pw = (await body(request)).password;
+  const target = await env.DB.prepare('SELECT email, role FROM users WHERE id = ?').bind(id).first();
   if (!target) throw new HttpError(404, 'User not found');
+  const hash = await hashPassword(target.role === 'admin' ? adminPassword(pw) : password(pw));
   await env.DB.batch([
     env.DB.prepare('UPDATE users SET password_hash = ?, failed_attempts = 0, locked_until = 0 WHERE id = ?').bind(hash, id),
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id),
@@ -441,8 +530,10 @@ add('POST', '/api/setup', setup, 'public');
 add('POST', '/api/auth/register', register, 'public');
 add('POST', '/api/auth/login', login, 'public');
 add('POST', '/api/auth/logout', logout, 'public');
+add('POST', '/api/admin/login', adminLogin, 'public');
 add('GET', '/api/auth/me', me, 'public');
 add('GET', '/api/products', listProducts, 'public');
+add('GET', '/api/products/:id', productDetail, 'public');
 add('GET', '/api/drops', listDropsPublic, 'public');
 add('POST', '/api/drops/:id/subscribe', subscribe, 'customer');
 add('POST', '/api/contact', contact, 'public');
@@ -452,6 +543,11 @@ add('GET', '/api/admin/products', adminProducts, 'staff');
 add('POST', '/api/admin/products', createProduct, 'staff');
 add('PUT', '/api/admin/products/:id', updateProduct, 'staff');
 add('DELETE', '/api/admin/products/:id', deleteProduct, 'staff');
+add('GET', '/api/admin/products/:id/images', listProductImages, 'staff');
+add('POST', '/api/admin/products/:id/images', addProductImage, 'staff');
+add('PUT', '/api/admin/images/:id', updateProductImage, 'staff');
+add('POST', '/api/admin/images/:id/cover', setCoverImage, 'staff');
+add('DELETE', '/api/admin/images/:id', deleteProductImage, 'staff');
 add('GET', '/api/admin/orders', adminOrders, 'staff');
 add('GET', '/api/admin/orders/:id', orderDetail, 'staff');
 add('PUT', '/api/admin/orders/:id', updateOrder, 'staff');

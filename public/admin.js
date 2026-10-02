@@ -31,10 +31,16 @@
   $('loginForm').addEventListener('submit', async function (e) {
     e.preventDefault(); $('loginErr').textContent = '';
     try {
-      var r = await api('POST', '/auth/login', { email: $('em').value, password: $('pw').value });
+      var staffMode = !$('emField').hidden;
+      var r = staffMode ? await api('POST', '/auth/login', { email: $('em').value, password: $('pw').value }) : await api('POST', '/admin/login', { password: $('pw').value });
       if (r.user.role === 'customer') { await api('POST', '/auth/logout').catch(function () {}); throw new Error('This account does not have admin access.'); }
       $('pw').value = ''; showApp(r.user);
     } catch (err) { $('loginErr').textContent = err.message; }
+  });
+  $('modeLink').addEventListener('click', function () {
+    var show = $('emField').hidden; $('emField').hidden = !show; $('em').required = show;
+    $('modeLink').textContent = show ? 'Back to password-only sign in' : 'Staff account? Sign in with email';
+    (show ? $('em') : $('pw')).focus();
   });
   $('logoutBtn').addEventListener('click', async function () { await api('POST', '/auth/logout').catch(function () {}); showLogin(); });
   $('themeBtn').addEventListener('click', function () {
@@ -59,9 +65,10 @@
     products: async function () {
       cache.products = (await api('GET', '/admin/products')).products;
       var rows = cache.products.map(function (p) {
-        return '<tr><td><strong>' + esc(p.name) + '</strong><div class="sub">' + esc(p.sku) + '</div></td><td>' + esc(p.department) + ' / ' + esc(p.category) + '</td><td>' + money(p.price_cents) + '</td>' +
+        var thumb = p.image_url ? '<img class="thumb" src="' + esc(p.image_url) + '" alt="" loading="lazy">' : '<span class="thumb thumb-empty" style="--swatch-c:var(--' + esc(p.color) + ');"></span>';
+        return '<tr><td><div style="display:flex;align-items:center;gap:10px;">' + thumb + '<div><strong>' + esc(p.name) + '</strong><div class="sub">' + esc(p.sku) + (p.image_count ? ' &middot; ' + p.image_count + ' photo' + (p.image_count > 1 ? 's' : '') : ' &middot; no photos') + '</div></div></div></td><td>' + esc(p.department) + ' / ' + esc(p.category) + '</td><td>' + money(p.price_cents) + '</td>' +
           '<td class="' + (p.stock <= 10 ? 'low' : '') + '">' + p.stock + (p.stock <= 10 ? ' (low)' : '') + '</td><td>' + pill(p.status) + '</td>' +
-          '<td class="r"><div class="actions"><button class="btn ghost sm" data-act="edit-product" data-id="' + p.id + '">Edit</button><button class="btn ghost sm" data-act="del-product" data-id="' + p.id + '">Delete</button></div></td></tr>';
+          '<td class="r"><div class="actions"><button class="btn ghost sm" data-act="edit-product" data-id="' + p.id + '">Edit</button><button class="btn ghost sm" data-act="images-product" data-id="' + p.id + '">Images</button><button class="btn ghost sm" data-act="del-product" data-id="' + p.id + '">Delete</button></div></td></tr>';
       }).join('');
       return '<div class="tools"><span class="who">' + cache.products.length + ' products</span><button class="btn red" data-act="add-product">Add product</button></div>' +
         table('<th>Name</th><th>Department</th><th>Price</th><th>Stock</th><th>Status</th><th class="r">Actions</th>', rows, 'No products yet.');
@@ -163,6 +170,44 @@
       });
   }
 
+  async function imagesModal(p) {
+    var root = $('modalRoot');
+    root.innerHTML = '<div class="overlay open" id="ov"><div class="modal open" role="dialog" aria-modal="true" style="width:min(560px,92vw);">' +
+      '<button type="button" class="closebtn" id="imgClose" aria-label="Close" style="position:absolute;top:14px;right:14px;">\u2715</button>' +
+      '<h2 class="display">' + esc(p.name) + '</h2><p class="sub" style="margin:-10px 0 16px;">Up to 12 photos. The first (or "Set as cover") shows on the storefront and in search.</p>' +
+      '<div id="imgList" class="imglist"></div>' +
+      '<form id="imgAddForm" style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">' +
+      field('Image URL (https://...)', 'url', '', 'required placeholder="https://images.example.com/photo.jpg"') +
+      field('Alt text (for screen readers)', 'alt', '', 'maxlength="200" placeholder="' + esc(p.name) + ', front view"') +
+      '<p class="formerr" role="alert"></p><button class="btn red" type="submit">Add image</button></form></div></div>';
+    $('imgClose').addEventListener('click', function () { root.innerHTML = ''; render(); });
+    $('ov').addEventListener('mousedown', function (e) { if (e.target.id === 'ov') { root.innerHTML = ''; render(); } });
+    document.addEventListener('keydown', function esc1(e) { if (e.key === 'Escape') { root.innerHTML = ''; document.removeEventListener('keydown', esc1); } });
+
+    async function reload() {
+      var imgs = (await api('GET', '/admin/products/' + p.id + '/images')).images;
+      var list = $('imgList');
+      list.innerHTML = imgs.length ? imgs.map(function (im, i) {
+        return '<div class="imgrow"><img src="' + esc(im.url) + '" alt="" loading="lazy">' +
+          '<div class="imgmeta"><div class="sub">' + (i === 0 ? '<strong>Cover photo</strong>' : 'Position ' + (i + 1)) + '</div><div class="sub">' + esc(im.alt_text || 'No alt text') + '</div></div>' +
+          '<div class="actions">' + (i !== 0 ? '<button type="button" class="btn ghost sm" data-cover="' + im.id + '">Set as cover</button>' : '') +
+          '<button type="button" class="btn ghost sm" data-delimg="' + im.id + '">Delete</button></div></div>';
+      }).join('') : '<p class="sub">No photos yet. Paste an image URL below to add one.</p>';
+    }
+    $('imgList').addEventListener('click', async function (e) {
+      var t = e.target;
+      if (t.dataset.cover) { await api('POST', '/admin/images/' + t.dataset.cover + '/cover'); await reload(); toast('Cover photo updated'); }
+      else if (t.dataset.delimg) { if (confirm('Delete this photo?')) { await api('DELETE', '/admin/images/' + t.dataset.delimg); await reload(); toast('Photo deleted'); } }
+    });
+    $('imgAddForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var f = e.target, err = f.querySelector('.formerr');
+      try { await api('POST', '/admin/products/' + p.id + '/images', { url: f.url.value, altText: f.alt.value }); f.reset(); err.textContent = ''; await reload(); toast('Photo added'); }
+      catch (ex) { err.textContent = ex.message; }
+    });
+    await reload();
+  }
+
   // ---------- events ----------
   $('nav').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { current = b.dataset.view; render(); } });
   async function run(promise, msg) { try { await promise; toast(msg); render(); } catch (err) { toast(err.message); render(); } }
@@ -172,6 +217,7 @@
     var act = t.dataset.act, id = t.dataset.id;
     if (act === 'add-product') productModal(null);
     else if (act === 'edit-product') productModal(cache.products.find(function (p) { return p.id == id; }));
+    else if (act === 'images-product') imagesModal(cache.products.find(function (p) { return p.id == id; }));
     else if (act === 'del-product') { var p = cache.products.find(function (x) { return x.id == id; }); if (confirm('Delete "' + p.name + '"? Past orders keep their line items.')) run(api('DELETE', '/admin/products/' + id), 'Product deleted'); }
     else if (act === 'filter') { orderFilter = id; render(); }
     else if (act === 'view-order') {
