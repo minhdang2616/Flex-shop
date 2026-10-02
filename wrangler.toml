@@ -5,4 +5,4 @@ pages_build_output_dir = "./public"
 [[d1_databases]]
 binding = "DB"
 database_name = "flex-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"   # printed by: npx wrangler d1 create flex-db
+database_id = "20b98e68-141d-4536-8c9f-7e8162e54f38"   # printed by: npx wrangler d1 create flex-db
