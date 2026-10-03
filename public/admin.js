@@ -31,16 +31,10 @@
   $('loginForm').addEventListener('submit', async function (e) {
     e.preventDefault(); $('loginErr').textContent = '';
     try {
-      var staffMode = !$('emField').hidden;
-      var r = staffMode ? await api('POST', '/auth/login', { email: $('em').value, password: $('pw').value }) : await api('POST', '/admin/login', { password: $('pw').value });
+      var r = await api('POST', '/auth/login', { email: $('em').value, password: $('pw').value });
       if (r.user.role === 'customer') { await api('POST', '/auth/logout').catch(function () {}); throw new Error('This account does not have admin access.'); }
       $('pw').value = ''; showApp(r.user);
     } catch (err) { $('loginErr').textContent = err.message; }
-  });
-  $('modeLink').addEventListener('click', function () {
-    var show = $('emField').hidden; $('emField').hidden = !show; $('em').required = show;
-    $('modeLink').textContent = show ? 'Back to password-only sign in' : 'Staff account? Sign in with email';
-    (show ? $('em') : $('pw')).focus();
   });
   $('logoutBtn').addEventListener('click', async function () { await api('POST', '/auth/logout').catch(function () {}); showLogin(); });
   $('themeBtn').addEventListener('click', function () {
