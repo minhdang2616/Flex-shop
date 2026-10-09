@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Flex — Built to move first</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="theme-color" content="#111111">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,7 +17,7 @@
     <div class="wrap utility-wrap">
       <a href="index.html#contact">Find a Store</a>
       <a href="index.html#contact">Help</a>
-      <a href="index.html">Join Us</a>
+      <a href="register.html">Join Us</a>
       <a href="index.html" id="signInLink">Sign In</a>
     </div>
   </div>
@@ -23,7 +25,7 @@
     <a class="logo" href="index.html">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <path d="M2 22L11 2H22L13 22H2Z" fill="#111111"/>
-        <path d="M14 22L21 7" stroke="#D30005" stroke-width="3"/>
+        <path d="M14 22L21 7" stroke="#FF3B2E" stroke-width="3"/>
       </svg>
       <span>Flex</span>
     </a>
@@ -115,7 +117,7 @@
   </nav>
   <div class="promobar">
     <span>Free Standard Delivery &amp; 30-Day Free Returns</span>
-    <span class="promolinks"><a href="index.html">Join Now</a> <a href="index.html#contact">View Details</a></span>
+    <span class="promolinks"><a href="register.html">Join Now</a> <a href="index.html#contact">View Details</a></span>
   </div>
 </header>
 <main id="top">
@@ -191,29 +193,22 @@
 <div class="overlay" id="overlay"></div>
 <div class="modal" id="accountModal" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
   <button class="closebtn" id="closeAccount" aria-label="Close">✕</button>
-  <h2 id="accountTitle">Account</h2>
+  <h2 id="accountTitle">Log in</h2>
   <div id="accountInfo" hidden>
     <p id="accountHello"></p>
     <button class="cta dark" id="logoutBtn" type="button">Sign out</button>
   </div>
   <div id="authPanel">
-  <div class="tabs">
-    <button class="tab active" id="tabLogin">Log in</button>
-    <button class="tab" id="tabRegister">Create account</button>
-  </div>
+  <p class="authnote" id="authNote" hidden></p>
   <form class="authform active" id="loginForm">
-    <div class="field"><label for="lemail">Email</label><input id="lemail" type="email" required></div>
+    <div class="field"><label for="lusername">Username</label><input id="lusername" type="text" autocomplete="username" required></div>
     <div class="field"><label for="lpass">Password</label><input id="lpass" type="password" autocomplete="current-password" required></div>
     <button class="cta dark" type="submit" style="width:100%;text-align:center;">Log in</button>
     <p class="formmsg" id="loginMsg" role="alert"></p>
   </form>
-  <form class="authform" id="registerForm">
-    <div class="field"><label for="rname">Name</label><input id="rname" type="text" required></div>
-    <div class="field"><label for="remail">Email</label><input id="remail" type="email" required></div>
-    <div class="field"><label for="rpass">Password</label><input id="rpass" type="password" minlength="8" autocomplete="new-password" required></div>
-    <button class="cta dark" type="submit" style="width:100%;text-align:center;">Create account</button>
-    <p class="formmsg" id="registerMsg" role="alert"></p>
-  </form>
+  <p class="altlink">Don't have an account? <a id="signupLink" href="register.html">Create one</a></p>
+  <div class="divider"><span>Quick sign-in / sign-up</span></div>
+  <a class="gbtn" id="googleLogin" href="/api/auth/google/start"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Continue with Google</span></a>
   </div>
 </div>
 
