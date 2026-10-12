@@ -6,6 +6,12 @@ CREATE TABLE IF NOT EXISTS users (
   username        TEXT NOT NULL UNIQUE COLLATE NOCASE,  -- the login identifier
   email           TEXT NOT NULL COLLATE NOCASE,          -- informational only; not used to sign in, not required unique
   name            TEXT NOT NULL,
+  phone           TEXT NOT NULL DEFAULT '',
+  address         TEXT NOT NULL DEFAULT '',
+  city            TEXT NOT NULL DEFAULT '',
+  postal_code     TEXT NOT NULL DEFAULT '',
+  country         TEXT NOT NULL DEFAULT '',
+  google_sub      TEXT,                                  -- Google account id, set for accounts created with "Continue with Google"
   password_hash   TEXT NOT NULL,                       -- pbkdf2$iterations$salt$hash (never plaintext)
   role            TEXT NOT NULL DEFAULT 'customer' CHECK (role IN ('customer','staff','admin')),
   status          TEXT NOT NULL DEFAULT 'active'   CHECK (status IN ('active','disabled')),
@@ -14,6 +20,8 @@ CREATE TABLE IF NOT EXISTS users (
   created_at      INTEGER NOT NULL,
   last_login_at   INTEGER
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub);   -- NULLs are allowed many times; real ids must be unique
 
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY,                         -- sha-256 of the cookie token
@@ -41,15 +49,20 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE INDEX IF NOT EXISTS idx_products_browse ON products(status, department, category);
 
 -- One row per photo. position 0 is the cover shown on product cards; higher positions are gallery order.
+-- Uploaded photos are kept in Workers KV under file_key and served from /api/img/<key>. Older rows may still hold an external https url.
 CREATE TABLE IF NOT EXISTS product_images (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  url        TEXT NOT NULL CHECK (url LIKE 'https://%'),
-  alt_text   TEXT NOT NULL DEFAULT '',
-  position   INTEGER NOT NULL DEFAULT 0,
-  width      INTEGER,
-  height     INTEGER,
-  created_at INTEGER NOT NULL
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id   INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  url          TEXT,
+  file_key       TEXT,
+  content_type TEXT,
+  size_bytes   INTEGER,
+  alt_text     TEXT NOT NULL DEFAULT '',
+  position     INTEGER NOT NULL DEFAULT 0,
+  width        INTEGER,
+  height       INTEGER,
+  created_at   INTEGER NOT NULL,
+  CHECK ((url IS NOT NULL AND url LIKE 'https://%') OR file_key IS NOT NULL)
 );
 CREATE INDEX IF NOT EXISTS idx_images_product ON product_images(product_id, position);
 
@@ -59,6 +72,8 @@ CREATE TABLE IF NOT EXISTS orders (
   user_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
   email       TEXT NOT NULL,
   name        TEXT NOT NULL,
+  phone        TEXT NOT NULL DEFAULT '',
+  ship_address TEXT NOT NULL DEFAULT '',
   total_cents INTEGER NOT NULL,
   status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','shipped','delivered','cancelled')),
   created_at  INTEGER NOT NULL
@@ -110,3 +125,13 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_log(created_at);
+
+-- A verified Google identity waiting for the person to finish their profile (15 minutes).
+CREATE TABLE IF NOT EXISTS oauth_pending (
+  token_hash TEXT PRIMARY KEY,                         -- sha-256 of the cookie token
+  google_sub TEXT NOT NULL,
+  email      TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);

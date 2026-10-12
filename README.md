@@ -18,29 +18,74 @@ npx wrangler d1 execute flex-db --remote --file=schema.sql
 npx wrangler d1 execute flex-db --remote --file=seed.sql
 
 # 3. Create the Pages project and a one-time setup secret (use a long random string)
-npx wrangler pages project create flex --production-branch main
-npx wrangler pages secret put SETUP_TOKEN --project-name flex
+npx wrangler pages project create flex-shop --production-branch main
+npx wrangler pages secret put SETUP_TOKEN --project-name flex-shop
 
 # 4. Deploy
 npx wrangler pages deploy
 
 # 5. Create YOUR admin account (works once, only while SETUP_TOKEN exists and no admin exists)
-curl -X POST https://flex.pages.dev/api/setup -H "Content-Type: application/json" \
-  -d '{"token":"YOUR_SETUP_TOKEN","name":"Your Name","email":"you@example.com","password":"a long passphrase"}'
+curl -X POST https://flex-shop.pages.dev/api/setup -H "Content-Type: application/json" \
+  -d '{"token":"YOUR_SETUP_TOKEN","username":"admin","name":"Your Name","email":"you@example.com","password":"a long passphrase"}'
 
 # 6. Turn setup off for good
-npx wrangler pages secret delete SETUP_TOKEN --project-name flex
+npx wrangler pages secret delete SETUP_TOKEN --project-name flex-shop
 ```
 
-Sign in at `https://flex.pages.dev/admin.html`. Create staff/admin/customer accounts from **Users**.
+Sign in at `https://flex-shop.pages.dev/admin.html`. Create staff/admin/customer accounts from **Users**.
 
-## Already deployed? Add the product_images table
+## Already deployed? Update your existing database
 
-If you deployed before this version, run the one new migration against your live database (safe to run more than once):
+Run each migration you haven't run yet, **once each, in order** (a second run fails with "duplicate column", which is harmless):
 
 ```bash
-npx wrangler d1 execute flex-db --remote --file=migrations/0002_product_images.sql
+npx wrangler d1 execute flex-db --remote --file=migrations/0003_username_login.sql      # username login (skip if you already did it)
+npx wrangler d1 execute flex-db --remote --file=migrations/0004_accounts_uploads.sql    # personal details, Google sign-in, photo uploads
+npx wrangler d1 execute flex-db --remote --file=migrations/0005_photo_storage.sql       # renames one column (photos live in KV)
 ```
+
+`0004` keeps every existing user, order and photo; it only adds columns and rebuilds the photo table. `0005` only renames a column.
+
+## Photo uploads (Workers KV, free)
+
+Photos are uploaded straight from the admin page (**Products -> Images**: drag in PNG, JPG or WebP files, 5 MB each, 12 per product).
+They are kept in a Workers KV namespace and served from your own site at `/api/img/<name>`. No payment method or paid plan is needed.
+
+```bash
+npx wrangler kv namespace create flex-images
+```
+It prints a block containing `id = "..."`. Copy only that id into `wrangler.toml`, replacing `PASTE_YOUR_KV_NAMESPACE_ID_HERE` (keep `binding = "IMAGES"`), then deploy:
+```bash
+npx wrangler pages deploy
+```
+
+- The file type is decided by reading the file itself, not its name, so a renamed script or SVG can't be uploaded as a "photo".
+- Deleting a photo or product deletes the stored file too. Photos added earlier as links keep working.
+- Free-plan limits: 1,000 uploads per day, 100,000 photo views per day (browsers cache photos, so repeat views don't count), 1 GB in total.
+- KV is eventually consistent: a brand-new photo can take up to about a minute to appear for visitors far from where you uploaded it.
+- Don't want photo uploads yet? Delete the `[[kv_namespaces]]` block from `wrangler.toml`. Everything else keeps working and the upload box explains that storage isn't set up.
+
+## Google sign-in ("Continue with Google")
+
+1. Google Cloud Console -> **APIs & Services -> OAuth consent screen** (External, add your site name and email).
+2. **Credentials -> Create credentials -> OAuth client ID -> Web application**. Under *Authorized redirect URIs* add
+   `https://YOUR-DOMAIN/api/auth/google/callback` (one line per domain you use, e.g. `https://flex-shop.pages.dev/...` and your custom domain).
+3. Store the two values as secrets, then redeploy:
+   ```bash
+   npx wrangler pages secret put GOOGLE_CLIENT_ID     --project-name flex-shop
+   npx wrangler pages secret put GOOGLE_CLIENT_SECRET --project-name flex-shop
+   npx wrangler pages deploy
+   ```
+
+Until these exist, the Google button shows "Google sign-in isn't set up on this site yet" instead of failing.
+First-time Google users are sent to a short form (username, phone, address) before the account is created. Accounts are matched by Google's
+account id, never by email, so a Google account can't take over a password account that happens to share an email address.
+
+## Accounts and the bag
+
+- Adding to the bag, opening the bag and checking out all require a login. The visitor's action is remembered and completed after they log in, register or return from Google.
+- Each account has its own bag (kept in the browser). Registering collects name, email, phone and address; orders keep a copy of the phone and shipping address.
+- Customers register on `register.html`; staff and admins are only created by an admin under **Users**.
 
 ## Run locally
 
@@ -63,31 +108,15 @@ that emulates the D1 interface: auth, lockout, roles, checkout/stock/rollback, c
 |---|---|---|
 | Accounts, roles, credentials | `users`, `sessions` | Users: create, edit role/status, reset password, delete |
 | Inventory | `products` | Products: price, stock, status, department, featured |
-| Product photos | `product_images` | Products → **Images**: add by URL, set cover photo, delete (12 per product max) |
+| Product photos | `product_images` + a KV namespace | Products → **Images**: upload files, set cover photo, delete (12 per product max) |
 | Orders | `orders`, `order_items` | Orders: view, change status (cancel restocks) |
 | Upcoming drops + notify list | `drops`, `drop_subscribers` | Upcoming drops |
 | Contact form | `messages` | Messages |
 | Who changed what | `audit_log` | Activity log (admin only) |
 
-## Bulk-adding product photos
-
-`product_images` stores an `https://` URL per photo, not the file itself, so each image needs to be hosted
-somewhere first — [Cloudflare R2](https://developers.cloudflare.com/r2/) (works well alongside Pages/D1),
-Cloudflare Images, or any CDN you already use. Uploading files from the admin UI isn't built yet; add images by
-URL under Products → **Images**, or load many at once with SQL, e.g. from a product photo dataset:
-
-```sql
-INSERT INTO product_images (product_id, url, alt_text, position, created_at) VALUES
-  (1, 'https://img.yoursite.com/1-front.jpg', 'Motion Tee, front view', 0, strftime('%s','now')),
-  (1, 'https://img.yoursite.com/1-back.jpg',  'Motion Tee, back view',  1, strftime('%s','now'));
-```
-
-Run it with `npx wrangler d1 execute flex-db --remote --file=your-import.sql`. Match `product_id` to the
-`id` already in your `products` table (check with `SELECT id, sku, name FROM products`), and keep `position`
-increasing per product — position `0` becomes the cover photo shown on the storefront.
-
 ## Security model
 
+- **Login is by username**, not email. Email is stored as contact info only — it's not unique and isn't used to sign in.
 - Passwords are salted PBKDF2-SHA256 hashes. **Nobody, including admins, can view a password**; admins can only set a new one.
 - Sessions are random tokens in an `HttpOnly; Secure; SameSite=Strict` cookie; only the SHA-256 of the token is stored.
 - Roles: `customer` (shop, checkout), `staff` (products, orders, drops, messages), `admin` (everything, incl. users and audit).
@@ -100,4 +129,5 @@ increasing per product — position `0` becomes the cover photo shown on the sto
 
 - Payments: checkout records the order; connect Stripe (or another processor) before charging real money.
 - Email: no verification, password-reset email, or order confirmations (Cloudflare Email Workers / Resend can add these).
-- Product images: cards use color blocks; add R2 storage + an image column when you have photography.
+- Profile editing: customers can't yet change their phone/address after registering (an admin can't either; only name, username, email, role and status are editable).
+- Image resizing: photos are stored and served as uploaded; resize before uploading for fast pages (Cloudflare Images can automate this later).

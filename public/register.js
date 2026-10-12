@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', function () {
     $('regTitle').textContent = 'Almost there';
     $('regLead').textContent = 'You\u2019re signing up with Google. Tell us a bit more to finish creating your account.';
     $('rName').value = info.name || ''; $('rEmail').value = info.email || ''; $('rEmail').readOnly = true;
+    var hint = document.createElement('small'); hint.textContent = 'Taken from your Google account.'; $('rEmail').parentNode.appendChild(hint);
     submit.textContent = 'Finish sign-up';
   }
 

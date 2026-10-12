@@ -23,7 +23,7 @@
   function showLogin(msg) { me = null; $('app').hidden = true; $('login').hidden = false; $('loginErr').textContent = msg || ''; }
   function showApp(user) {
     me = user; $('login').hidden = true; $('app').hidden = false;
-    $('who').textContent = user.name + ' (' + user.role + ')';
+    $('who').textContent = '@' + user.username + ' \u2014 ' + user.name + ' (' + user.role + ')';
     document.querySelectorAll('[data-admin]').forEach(function (b) { b.hidden = user.role !== 'admin'; });
     if (current === 'users' || current === 'activity') { if (user.role !== 'admin') current = 'dashboard'; }
     render();
@@ -31,7 +31,7 @@
   $('loginForm').addEventListener('submit', async function (e) {
     e.preventDefault(); $('loginErr').textContent = '';
     try {
-      var r = await api('POST', '/auth/login', { email: $('em').value, password: $('pw').value });
+      var r = await api('POST', '/auth/login', { username: $('un').value, password: $('pw').value });
       if (r.user.role === 'customer') { await api('POST', '/auth/logout').catch(function () {}); throw new Error('This account does not have admin access.'); }
       $('pw').value = ''; showApp(r.user);
     } catch (err) { $('loginErr').textContent = err.message; }
@@ -82,7 +82,7 @@
       cache.users = (await api('GET', '/admin/users')).users;
       var rows = cache.users.map(function (u) {
         var lock = u.locked_until > Date.now() / 1000 ? ' <span class="pill s-disabled">locked</span>' : '';
-        return '<tr><td><strong>' + esc(u.name) + '</strong><div class="sub">' + esc(u.email) + '</div></td><td>' + pill(u.role) + '</td><td>' + pill(u.status) + lock + '</td><td>' + u.orders + ' / ' + money(u.spent_cents) + '</td><td>' + when(u.last_login_at) + '</td>' +
+        return '<tr><td><strong>' + esc(u.username) + '</strong>' + (u.has_google ? ' <span class="pill s-new">google</span>' : '') + '<div class="sub">' + esc(u.name) + ' &middot; ' + esc(u.email) + (u.phone ? ' &middot; ' + esc(u.phone) : '') + '</div></td><td>' + pill(u.role) + '</td><td>' + pill(u.status) + lock + '</td><td>' + u.orders + ' / ' + money(u.spent_cents) + '</td><td>' + when(u.last_login_at) + '</td>' +
           '<td class="r"><div class="actions"><button class="btn ghost sm" data-act="edit-user" data-id="' + u.id + '">Edit</button><button class="btn ghost sm" data-act="reset-pw" data-id="' + u.id + '">Reset password</button>' +
           (u.id === me.id ? '' : '<button class="btn ghost sm" data-act="del-user" data-id="' + u.id + '">Delete</button>') + '</div></td></tr>';
       }).join('');
@@ -153,52 +153,89 @@
       });
   }
   function userModal(u) {
-    var isNew = !u; u = u || { name: '', email: '', role: 'customer', status: 'active' };
-    openModal('<h2 class="display">' + (isNew ? 'Create' : 'Edit') + ' user</h2>' + field('Name', 'name', u.name, 'required maxlength="100"') +
-      (isNew ? field('Email', 'email', '', 'type="email" required') + field('Password (min 8 characters)', 'password', '', 'type="password" minlength="8" required autocomplete="new-password"') : '<p class="sub">' + esc(u.email) + '</p>') +
+    var isNew = !u; u = u || { username: '', name: '', email: '', role: 'customer', status: 'active' };
+    openModal('<h2 class="display">' + (isNew ? 'Create' : 'Edit') + ' user</h2>' +
+      field('Username (used to sign in)', 'username', u.username, 'required maxlength="30" pattern="[a-zA-Z0-9_.]+" autocomplete="username"' + (isNew ? '' : '')) +
+      field('Name', 'name', u.name, 'required maxlength="100"') +
+      field('Email (info only, not used to sign in)', 'email', u.email, 'type="email" required') +
+      (isNew ? field('Password (min 8 characters)', 'password', '', 'type="password" minlength="8" required autocomplete="new-password"') : '') +
       select('Role', 'role', ['customer', 'staff', 'admin'], u.role) + (isNew ? '' : select('Status', 'status', ['active', 'disabled'], u.status)) +
-      (isNew ? '' : '<p class="sub">Changing a role or status signs the user out everywhere.</p>') + buttons('Save'),
+      (isNew ? '' : '<p class="sub">Any change here signs this user out everywhere, including you if you edit your own account.</p>') + buttons('Save'),
       function (f) {
-        if (isNew) return api('POST', '/admin/users', { name: f.name.value, email: f.email.value, password: f.password.value, role: f.role.value }).then(function () { toast('User created'); });
-        return api('PUT', '/admin/users/' + u.id, { name: f.name.value, role: f.role.value, status: f.status.value }).then(function () { toast('User updated'); });
+        if (isNew) return api('POST', '/admin/users', { username: f.username.value, name: f.name.value, email: f.email.value, password: f.password.value, role: f.role.value }).then(function () { toast('User created'); });
+        return api('PUT', '/admin/users/' + u.id, { username: f.username.value, name: f.name.value, email: f.email.value, role: f.role.value, status: f.status.value }).then(function () { toast('User updated'); });
       });
+  }
+
+  var MAX_PHOTO = 5 * 1024 * 1024, PHOTO_TYPES = ['image/png', 'image/jpeg', 'image/webp'], MAX_PHOTOS = 12;
+
+  // multipart upload (no JSON header: the browser sets the boundary itself)
+  async function uploadPhoto(productId, file, altText) {
+    var fd = new FormData(); fd.append('file', file); fd.append('altText', altText);
+    var res = await fetch('/api/admin/products/' + productId + '/images/upload', { method: 'POST', credentials: 'same-origin', body: fd });
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok) {
+      if (res.status === 401 && me) showLogin('Your session ended. Please sign in again.');
+      throw new Error(data.error || 'Upload failed');
+    }
+    return data;
   }
 
   async function imagesModal(p) {
     var root = $('modalRoot');
     root.innerHTML = '<div class="overlay open" id="ov"><div class="modal open" role="dialog" aria-modal="true" style="width:min(560px,92vw);">' +
       '<button type="button" class="closebtn" id="imgClose" aria-label="Close" style="position:absolute;top:14px;right:14px;">\u2715</button>' +
-      '<h2 class="display">' + esc(p.name) + '</h2><p class="sub" style="margin:-10px 0 16px;">Up to 12 photos. The first (or "Set as cover") shows on the storefront and in search.</p>' +
+      '<h2 class="display">' + esc(p.name) + '</h2><p class="sub" style="margin:-10px 0 16px;">Up to ' + MAX_PHOTOS + ' photos. The first one (or the one you set as cover) shows on the storefront, in search and in the bag.</p>' +
       '<div id="imgList" class="imglist"></div>' +
-      '<form id="imgAddForm" style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">' +
-      field('Image URL (https://...)', 'url', '', 'required placeholder="https://images.example.com/photo.jpg"') +
-      field('Alt text (for screen readers)', 'alt', '', 'maxlength="200" placeholder="' + esc(p.name) + ', front view"') +
-      '<p class="formerr" role="alert"></p><button class="btn red" type="submit">Add image</button></form></div></div>';
-    $('imgClose').addEventListener('click', function () { root.innerHTML = ''; render(); });
-    $('ov').addEventListener('mousedown', function (e) { if (e.target.id === 'ov') { root.innerHTML = ''; render(); } });
+      '<div style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">' +
+      '<label class="dropzone" id="dropzone"><input type="file" id="imgFile" class="visually-hidden" accept="image/png,image/jpeg,image/webp" multiple>' +
+      '<strong>Drop photos here, or click to choose</strong><span class="sub">PNG, JPG or WebP &middot; up to 5 MB each</span></label>' +
+      '<div class="field" style="margin-top:12px;"><label for="imgAlt">Description for screen readers (optional)</label><input id="imgAlt" maxlength="200" placeholder="' + esc(p.name) + ', front view"></div>' +
+      '<div id="uploadStatus" class="uploadstatus" aria-live="polite"></div></div></div></div>';
+    var count = 0;
+    function close() { root.innerHTML = ''; render(); }
+    $('imgClose').addEventListener('click', close);
+    $('ov').addEventListener('mousedown', function (e) { if (e.target.id === 'ov') close(); });
     document.addEventListener('keydown', function esc1(e) { if (e.key === 'Escape') { root.innerHTML = ''; document.removeEventListener('keydown', esc1); } });
 
     async function reload() {
       var imgs = (await api('GET', '/admin/products/' + p.id + '/images')).images;
-      var list = $('imgList');
-      list.innerHTML = imgs.length ? imgs.map(function (im, i) {
-        return '<div class="imgrow"><img src="' + esc(im.url) + '" alt="" loading="lazy">' +
-          '<div class="imgmeta"><div class="sub">' + (i === 0 ? '<strong>Cover photo</strong>' : 'Position ' + (i + 1)) + '</div><div class="sub">' + esc(im.alt_text || 'No alt text') + '</div></div>' +
+      count = imgs.length;
+      $('imgList').innerHTML = imgs.length ? imgs.map(function (im, i) {
+        var detail = im.size_bytes ? Math.max(1, Math.round(im.size_bytes / 1024)) + ' KB' : 'external link';
+        return '<div class="imgrow"><img src="' + esc(im.src) + '" alt="" loading="lazy">' +
+          '<div class="imgmeta"><div class="sub">' + (i === 0 ? '<strong>Cover photo</strong>' : 'Photo ' + (i + 1)) + ' &middot; ' + detail + '</div><div class="sub">' + esc(im.alt_text || 'No description') + '</div></div>' +
           '<div class="actions">' + (i !== 0 ? '<button type="button" class="btn ghost sm" data-cover="' + im.id + '">Set as cover</button>' : '') +
           '<button type="button" class="btn ghost sm" data-delimg="' + im.id + '">Delete</button></div></div>';
-      }).join('') : '<p class="sub">No photos yet. Paste an image URL below to add one.</p>';
+      }).join('') : '<p class="sub">No photos yet. Upload one below.</p>';
     }
     $('imgList').addEventListener('click', async function (e) {
       var t = e.target;
       if (t.dataset.cover) { await api('POST', '/admin/images/' + t.dataset.cover + '/cover'); await reload(); toast('Cover photo updated'); }
-      else if (t.dataset.delimg) { if (confirm('Delete this photo?')) { await api('DELETE', '/admin/images/' + t.dataset.delimg); await reload(); toast('Photo deleted'); } }
+      else if (t.dataset.delimg) { if (confirm('Delete this photo? The file is removed from storage too.')) { await api('DELETE', '/admin/images/' + t.dataset.delimg); await reload(); toast('Photo deleted'); } }
     });
-    $('imgAddForm').addEventListener('submit', async function (e) {
-      e.preventDefault();
-      var f = e.target, err = f.querySelector('.formerr');
-      try { await api('POST', '/admin/products/' + p.id + '/images', { url: f.url.value, altText: f.alt.value }); f.reset(); err.textContent = ''; await reload(); toast('Photo added'); }
-      catch (ex) { err.textContent = ex.message; }
-    });
+
+    async function handleFiles(fileList) {
+      var files = Array.prototype.slice.call(fileList), box = $('uploadStatus'), alt = $('imgAlt').value.trim() || p.name, ok = 0;
+      box.innerHTML = '';
+      for (var i = 0; i < files.length; i++) {
+        var f = files[i], line = document.createElement('div'); line.className = 'upl'; box.appendChild(line);
+        var say = function (cls, text) { line.className = 'upl ' + cls; line.textContent = text; };
+        if (PHOTO_TYPES.indexOf(f.type) === -1) { say('bad', f.name + ' \u2014 only PNG, JPG or WebP photos'); continue; }
+        if (f.size > MAX_PHOTO) { say('bad', f.name + ' \u2014 larger than 5 MB'); continue; }
+        if (count >= MAX_PHOTOS) { say('bad', f.name + ' \u2014 this product already has ' + MAX_PHOTOS + ' photos'); continue; }
+        say('', f.name + ' \u2014 uploading\u2026');
+        try { await uploadPhoto(p.id, f, alt); count++; ok++; say('good', f.name + ' \u2014 added'); await reload(); }
+        catch (err) { say('bad', f.name + ' \u2014 ' + err.message); }
+      }
+      if (ok) toast(ok === 1 ? 'Photo uploaded' : ok + ' photos uploaded');
+      $('imgFile').value = '';
+    }
+    $('imgFile').addEventListener('change', function () { if (this.files.length) handleFiles(this.files); });
+    var dz = $('dropzone');
+    ['dragenter', 'dragover'].forEach(function (n) { dz.addEventListener(n, function (e) { e.preventDefault(); dz.classList.add('over'); }); });
+    ['dragleave', 'drop'].forEach(function (n) { dz.addEventListener(n, function (e) { e.preventDefault(); dz.classList.remove('over'); }); });
+    dz.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
     await reload();
   }
 
@@ -216,7 +253,9 @@
     else if (act === 'filter') { orderFilter = id; render(); }
     else if (act === 'view-order') {
       var d = await api('GET', '/admin/orders/' + id);
-      openModal('<h2 class="display">' + esc(d.order.order_no) + '</h2><p class="sub">' + esc(d.order.name) + ' &middot; ' + esc(d.order.email) + ' &middot; ' + when(d.order.created_at) + '</p><ul class="items">' +
+      openModal('<h2 class="display">' + esc(d.order.order_no) + '</h2><p class="sub">' + esc(d.order.name) + ' &middot; ' + esc(d.order.email) + ' &middot; ' + when(d.order.created_at) + '</p>' +
+        (d.order.phone ? '<p class="sub">Phone: ' + esc(d.order.phone) + '</p>' : '') +
+        '<p class="sub">' + (d.order.ship_address ? 'Ship to: ' + esc(d.order.ship_address) : 'No shipping address on file.') + '</p><ul class="items">' +
         d.items.map(function (i) { return '<li><span>' + i.qty + ' &times; ' + esc(i.name) + '</span><strong>' + money(i.unit_price_cents * i.qty) + '</strong></li>'; }).join('') + '<li><strong>Total</strong><strong>' + money(d.order.total_cents) + '</strong></li></ul>' +
         '<div class="modal-actions"><button type="button" class="btn" data-cancel>Close</button></div>', function () {});
     }
@@ -229,11 +268,11 @@
     else if (act === 'edit-user') userModal(cache.users.find(function (u) { return u.id == id; }));
     else if (act === 'reset-pw') {
       var u = cache.users.find(function (x) { return x.id == id; });
-      openModal('<h2 class="display">Reset password</h2><p class="sub">Set a new password for ' + esc(u.email) + '. Existing passwords are hashed and can never be viewed. They will be signed out everywhere.</p>' +
+      openModal('<h2 class="display">Reset password</h2><p class="sub">Set a new password for ' + esc(u.username) + '. Existing passwords are hashed and can never be viewed. They will be signed out everywhere.</p>' +
         field('New password (min 8 characters)', 'password', '', 'type="password" minlength="8" required autocomplete="new-password"') + buttons('Reset'),
         function (f) { return api('POST', '/admin/users/' + id + '/password', { password: f.password.value }).then(function () { toast('Password reset'); }); });
     }
-    else if (act === 'del-user') { var du = cache.users.find(function (x) { return x.id == id; }); if (confirm('Delete ' + du.email + '? Their orders stay on record.')) run(api('DELETE', '/admin/users/' + id), 'User deleted'); }
+    else if (act === 'del-user') { var du = cache.users.find(function (x) { return x.id == id; }); if (confirm('Delete ' + du.username + '? Their orders stay on record.')) run(api('DELETE', '/admin/users/' + id), 'User deleted'); }
   });
   $('view').addEventListener('change', function (e) {
     if (e.target.dataset.act === 'order-status') run(api('PUT', '/admin/orders/' + e.target.dataset.id, { status: e.target.value }), 'Order updated');
