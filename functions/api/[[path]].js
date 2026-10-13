@@ -133,6 +133,7 @@ function orderNo() {
   return 'F-' + [...randomBytes(8)].map((b) => alphabet[b % alphabet.length]).join('');
 }
 const isUnique = (e) => /UNIQUE/i.test(String(e && e.message));
+const isUsernameConflict = (e) => /users\.username|idx_users_username/i.test(String(e && e.message));
 
 // ---------- public handlers ----------
 async function setup({ env, request }) {
@@ -159,7 +160,8 @@ async function register({ env, request }) {
     const user = { id: r.meta.last_row_id, username: un, email: e, name, role: 'customer' };
     return json({ user: publicUser(user) }, 201, { 'Set-Cookie': await startSession(env, user) });
   } catch (err) {
-    if (isUnique(err)) throw new HttpError(409, 'That username is already taken');
+    if (isUsernameConflict(err)) throw new HttpError(409, 'That username is already taken');
+    if (isUnique(err)) throw new HttpError(409, 'This account conflicts with an existing email or Google account. Check the details and try again.');
     throw err;
   }
 }
@@ -532,7 +534,11 @@ async function createUser({ env, request, user }) {
   const hash = await hashPassword(password(b.password));
   try {
     await env.DB.prepare('INSERT INTO users (username, email, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(un, e, name, hash, role, now()).run();
-  } catch (err) { if (isUnique(err)) throw new HttpError(409, 'That username is already taken'); throw err; }
+  } catch (err) {
+    if (isUsernameConflict(err)) throw new HttpError(409, 'That username is already taken');
+    if (isUnique(err)) throw new HttpError(409, 'This account conflicts with an existing email or Google account.');
+    throw err;
+  }
   await audit(env, user, 'user.create', `${un} (${role})`);
   return json({ ok: true }, 201);
 }
@@ -548,7 +554,11 @@ async function updateUser({ env, request, user, params }) {
       env.DB.prepare('UPDATE users SET username = ?, email = ?, name = ?, role = ?, status = ? WHERE id = ?').bind(un, e, name, role, status, id),
       env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id),   // force re-login after any change
     ]);
-  } catch (err) { if (isUnique(err)) throw new HttpError(409, 'That username is already taken'); throw err; }
+  } catch (err) {
+    if (isUsernameConflict(err)) throw new HttpError(409, 'That username is already taken');
+    if (isUnique(err)) throw new HttpError(409, 'This account conflicts with an existing email or Google account.');
+    throw err;
+  }
   await audit(env, user, 'user.update', `${target.username} -> ${un}: role=${role}, status=${status}`);
   return json({ ok: true });
 }

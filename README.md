@@ -42,9 +42,10 @@ Run each migration you haven't run yet, **once each, in order** (a second run fa
 npx wrangler d1 execute flex-db --remote --file=migrations/0003_username_login.sql      # username login (skip if you already did it)
 npx wrangler d1 execute flex-db --remote --file=migrations/0004_accounts_uploads.sql    # personal details, Google sign-in, photo uploads
 npx wrangler d1 execute flex-db --remote --file=migrations/0005_photo_storage.sql       # renames one column (photos live in KV)
+npx wrangler d1 execute flex-db --remote --file=migrations/0006_email_not_unique.sql    # removes the old unique-email constraint
 ```
 
-`0004` keeps every existing user, order and photo; it only adds columns and rebuilds the photo table. `0005` only renames a column.
+`0004` keeps every existing user, order and photo; it only adds columns and rebuilds the photo table. `0005` only renames a column. `0006` rebuilds the users table while preserving accounts, sessions and order references; usernames stay unique, emails do not.
 
 ## Photo uploads (Workers KV, free)
 
