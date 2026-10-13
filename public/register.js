@@ -30,6 +30,13 @@ document.addEventListener('DOMContentLoaded', function () {
     $('rName').value = info.name || ''; $('rEmail').value = info.email || ''; $('rEmail').readOnly = true;
     var hint = document.createElement('small'); hint.textContent = 'Taken from your Google account.'; $('rEmail').parentNode.appendChild(hint);
     submit.textContent = 'Finish sign-up';
+    var modeHelp = document.createElement('p'); modeHelp.className = 'altlink';
+    var switchLink = document.createElement('a'); switchLink.href = 'register.html' + (next && next !== '/' ? '?next=' + encodeURIComponent(next) : '');
+    switchLink.textContent = 'Prefer a username and password? Create a regular account';
+    modeHelp.appendChild(switchLink); $('regLead').insertAdjacentElement('afterend', modeHelp);
+    var passwordHelp = document.createElement('small'); passwordHelp.className = 'field-hint';
+    passwordHelp.textContent = 'Google accounts use Google to sign in, so they do not need a separate password.';
+    $('pwFields').parentNode.insertBefore(passwordHelp, $('pwFields').nextSibling);
   }
 
   if (googleMode) {

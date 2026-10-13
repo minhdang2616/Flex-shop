@@ -3,6 +3,11 @@
 -- D1 defers FK checks for the duration of this migration transaction while users is rebuilt.
 PRAGMA defer_foreign_keys = ON;
 
+-- One legacy account has a blank username. Keep it and give it a valid, unique login name.
+UPDATE users
+SET username = 'legacy_' || id || '_' || lower(substr(hex(randomblob(6)), 1, 12))
+WHERE username IS NULL OR trim(username) = '';
+
 CREATE TABLE users_new (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   username        TEXT NOT NULL UNIQUE COLLATE NOCASE,
