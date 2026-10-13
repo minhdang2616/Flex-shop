@@ -11,4 +11,4 @@ database_id = "20b98e68-141d-4536-8c9f-7e8162e54f38"
 # then paste the id it prints below. Keep the binding name IMAGES.
 [[kv_namespaces]]
 binding = "IMAGES"
-id = "PASTE_YOUR_KV_NAMESPACE_ID_HERE"
+id = "63dac4ce75bc4d9c836870cd87da8e7e"
