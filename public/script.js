@@ -41,9 +41,10 @@ document.addEventListener('DOMContentLoaded', function () {
   function openAccount(msg) {
     closeAll(); accountModal.classList.add('open'); overlay.classList.add('open');
     $('accountTitle').textContent = user ? 'Your account' : 'Log in';
-    ['myOrdersBtn', 'editProfileBtn'].forEach(function (id) { var b = $(id); if (b) { b.hidden = false; b.disabled = false; b.textContent = id === 'myOrdersBtn' ? 'My orders' : 'Edit profile & delivery'; } });
+    ['myOrdersBtn', 'editProfileBtn', 'changePasswordBtn'].forEach(function (id) { var b = $(id); if (b) { b.hidden = false; b.disabled = false; b.textContent = id === 'myOrdersBtn' ? 'My orders' : id === 'editProfileBtn' ? 'Edit profile & delivery' : 'Change password'; } });
     var orderHistory = $('orderHistory'); if (orderHistory) orderHistory.remove();
     var profileForm = $('profileForm'); if (profileForm) profileForm.remove();
+    var passwordForm = $('passwordForm'); if (passwordForm) passwordForm.remove();
     if ($('accountHello')) $('accountHello').hidden = false;
     if ($('logoutBtn')) $('logoutBtn').hidden = false;
     var n = $('authNote'); if (n) { n.textContent = msg || ''; n.hidden = !msg; }
@@ -91,6 +92,7 @@ document.addEventListener('DOMContentLoaded', function () {
       $('accountHello').textContent = 'Signed in as ' + user.name + ' (@' + user.username + ')';
       if (!$('myOrdersBtn')) $('accountInfo').insertAdjacentHTML('afterbegin', '<button class="cta ghost" id="myOrdersBtn" type="button" style="width:100%;margin:0 0 10px">My orders</button>');
       if (!$('editProfileBtn')) $('accountInfo').insertAdjacentHTML('afterbegin', '<button class="cta ghost" id="editProfileBtn" type="button" style="width:100%;margin:0 0 10px">Edit profile & delivery</button>');
+      if (!$('changePasswordBtn')) $('accountInfo').insertAdjacentHTML('afterbegin', '<button class="cta ghost" id="changePasswordBtn" type="button" style="width:100%;margin:0 0 10px">Change password</button>');
     }
     $('accountTitle').textContent = user ? 'Your account' : 'Log in';
   }
@@ -98,12 +100,40 @@ document.addEventListener('DOMContentLoaded', function () {
   $('signInLink').addEventListener('click', function (e) { e.preventDefault(); if (user) { logout(); closeAll(); } else openAccount(); });
   $('logoutBtn').addEventListener('click', function () { logout(); closeAll(); });
   $('accountInfo').addEventListener('click', async function (e) {
+    if (e.target.id === 'changePasswordBtn') {
+      var passwordBtn = e.target; passwordBtn.disabled = true; passwordBtn.textContent = 'Loading…';
+      try {
+        var info = await api('GET', '/account/profile');
+        openAccount(); $('accountTitle').textContent = 'Change password';
+        $('accountHello').hidden = true; $('myOrdersBtn').hidden = true; $('editProfileBtn').hidden = true; $('changePasswordBtn').hidden = true; $('logoutBtn').hidden = true;
+        var form = document.createElement('form'); form.id = 'passwordForm';
+        form.innerHTML = (info.profile.hasGoogle ? (info.profile.hasPassword ? '<p class="authnote">Verify with your current password, or request a code at your Google account email.</p><div class="field"><label for="oldPassword">Current password</label><input id="oldPassword" name="currentPassword" type="password" autocomplete="current-password"></div><p class="authnote">Or</p>' : '<p class="authnote">This Google account has no password yet. Request a verification code to set one.</p>') + '<button class="cta ghost" id="sendPasswordCode" type="button" style="width:100%">Send code to my email</button><div class="field" id="passwordCodeWrap" hidden><label for="passwordCode">Email verification code</label><input id="passwordCode" name="resetCode" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"></div>' : '<div class="field"><label for="oldPassword">Current password</label><input id="oldPassword" name="currentPassword" type="password" autocomplete="current-password" required></div>') +
+          '<div class="field"><label for="newPassword">New password</label><input id="newPassword" name="newPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><small>Use at least 8 characters.</small></div>' +
+          '<div class="field"><label for="confirmPassword">Confirm new password</label><input id="confirmPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></div>' +
+          '<p class="formmsg" id="passwordMsg" role="alert"></p><button class="cta dark" type="submit" style="width:100%">Save new password</button>';
+        $('accountInfo').appendChild(form);
+        if (info.profile.hasGoogle) $('sendPasswordCode').addEventListener('click', async function () {
+          var send = this, msg = $('passwordMsg'); send.disabled = true; msg.classList.add('show'); msg.textContent = 'Sending verification code…';
+          try { await api('POST', '/account/password-code', {}); $('passwordCodeWrap').hidden = false; $('passwordCode').required = true; msg.textContent = 'Code sent to your Google account email. It expires in 10 minutes.'; $('passwordCode').focus(); }
+          catch (err) { msg.textContent = err.message; }
+          finally { send.disabled = false; }
+        });
+        form.addEventListener('submit', async function (ev) {
+          ev.preventDefault(); var save = form.querySelector('button[type=submit]'), msg = $('passwordMsg');
+          if ($('newPassword').value !== $('confirmPassword').value) { msg.classList.add('show'); msg.textContent = 'The new passwords do not match.'; $('confirmPassword').focus(); return; }
+          save.disabled = true; msg.classList.add('show'); msg.textContent = 'Updating password…';
+          try { await api('POST', '/account/password', Object.fromEntries(new FormData(form).entries())); form.reset(); msg.textContent = 'Password updated. Other signed-in devices have been signed out.'; }
+          catch (err) { msg.textContent = err.message; save.disabled = false; }
+        });
+      } catch (err) { passwordBtn.disabled = false; passwordBtn.textContent = 'Change password'; }
+      return;
+    }
     if (e.target.id === 'editProfileBtn') {
       var editBtn = e.target; editBtn.disabled = true; editBtn.textContent = 'Loading…';
       try {
         var data = await api('GET', '/account/profile'), p = data.profile;
         openAccount(); $('accountTitle').textContent = 'Profile & delivery';
-        $('accountHello').hidden = true; $('myOrdersBtn').hidden = true; $('editProfileBtn').hidden = true; $('logoutBtn').hidden = true;
+        $('accountHello').hidden = true; $('myOrdersBtn').hidden = true; $('editProfileBtn').hidden = true; $('changePasswordBtn').hidden = true; $('logoutBtn').hidden = true;
         var form = document.createElement('form'); form.id = 'profileForm'; form.innerHTML =
           '<div class="field"><label for="pfName">Full name</label><input id="pfName" name="name" required maxlength="100" value="' + esc(p.name) + '"></div>' +
           '<div class="field"><label for="pfEmail">Email</label><input id="pfEmail" name="email" type="email" required value="' + esc(p.email) + '"></div>' +
@@ -128,7 +158,7 @@ document.addEventListener('DOMContentLoaded', function () {
       var r = await api('GET', '/orders');
       var rows = r.orders.map(function (o) { return '<li style="display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--g200)"><span><strong>' + esc(o.order_no) + '</strong><br><small>' + esc(new Date(o.created_at * 1000).toLocaleDateString()) + ' · ' + o.items + ' items · ' + esc(o.status) + '</small>' + (o.status === 'pending' ? '<br><button class="remove" data-cancel-order="' + o.id + '" type="button">Cancel order</button>' : '') + '</span><strong>' + money(o.total_cents) + '</strong></li>'; }).join('');
       openAccount(); $('accountTitle').textContent = 'Your orders'; $('authPanel').hidden = true;
-      $('accountHello').hidden = true; btn.hidden = true; $('logoutBtn').hidden = true;
+      $('accountHello').hidden = true; btn.hidden = true; $('editProfileBtn').hidden = true; $('changePasswordBtn').hidden = true; $('logoutBtn').hidden = true;
       var list = $('orderHistory');
       if (!list) { list = document.createElement('div'); list.id = 'orderHistory'; $('accountInfo').appendChild(list); }
       list.innerHTML = rows ? '<ul style="list-style:none;padding:0;margin:0;max-height:55vh;overflow:auto">' + rows + '</ul>' : '<p class="cart-empty">You have not placed an order yet.</p>';
@@ -330,8 +360,8 @@ document.addEventListener('DOMContentLoaded', function () {
     e.preventDefault();
     var msg = $('contactMsg'); msg.classList.add('show'); msg.textContent = 'Sending...';
     try {
-      await api('POST', '/contact', { name: $('cname').value, email: $('cemail').value, message: $('cmsg').value });
-      contactForm.reset(); msg.textContent = "Sent. We'll get back to you within a day.";
+      var result = await api('POST', '/contact', { name: $('cname').value, email: $('cemail').value, message: $('cmsg').value });
+      contactForm.reset(); msg.textContent = result.emailSent ? "Sent to Flex Shop. We'll get back to you within a day." : 'Message saved. The shop can review it in the Messages page.';
     } catch (err) { msg.textContent = err.message; }
   });
 

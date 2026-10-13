@@ -48,6 +48,25 @@ async function sha256hex(text) {
   const d = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(text)));
   return [...d].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
+async function sendShopEmail(env, { to, subject, text, replyTo }) {
+  const gmailClientId = env.GMAIL_CLIENT_ID || env.GOOGLE_CLIENT_ID;
+  const gmailClientSecret = env.GMAIL_CLIENT_SECRET || env.GOOGLE_CLIENT_SECRET;
+  if (env.GMAIL_REFRESH_TOKEN && gmailClientId && gmailClientSecret) {
+    const tokenResponse = await fetch(GOOGLE_TOKEN, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: gmailClientId, client_secret: gmailClientSecret, refresh_token: env.GMAIL_REFRESH_TOKEN, grant_type: 'refresh_token' }) });
+    if (!tokenResponse.ok) return false;
+    const { access_token: accessToken } = await tokenResponse.json();
+    const headers = [`From: Flex Shop <flexshopcompany@gmail.com>`, `To: ${to}`, `Subject: ${subject}`, 'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: 8bit'];
+    if (replyTo) headers.push(`Reply-To: ${replyTo}`);
+    const raw = b64(enc.encode(`${headers.join('\r\n')}\r\n\r\n${text}`)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const sent = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ raw }) });
+    return sent.ok;
+  }
+  if (!env.RESEND_API_KEY || !env.RESET_EMAIL_FROM) return false;
+  const sent = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: env.RESET_EMAIL_FROM, to: [to], subject, text, ...(replyTo ? { reply_to: replyTo } : {}) }) });
+  return sent.ok;
+}
 const DUMMY_HASH = `pbkdf2$${PBKDF2_ITER}$${b64(new Uint8Array(16))}$${b64(new Uint8Array(32))}`;   // equalises timing for unknown emails
 
 // ---------- validation ----------
@@ -251,7 +270,10 @@ async function contact({ env, request }) {
   const { n } = await env.DB.prepare('SELECT COUNT(*) AS n FROM messages WHERE email = ? AND created_at > ?').bind(e, now() - 3600).first();
   if (n >= 5) throw new HttpError(429, 'Too many messages. Please try again later.');
   await env.DB.prepare('INSERT INTO messages (name, email, body, created_at) VALUES (?, ?, ?, ?)').bind(name, e, text, now()).run();
-  return json({ ok: true }, 201);
+  let emailSent = false;
+  try { emailSent = await sendShopEmail(env, { to: 'flexshopcompany@gmail.com', subject: 'Flex Shop feedback', text: `From: ${name} <${e}>\n\n${text}`, replyTo: e }); } catch (_) {}
+  if ((env.GMAIL_REFRESH_TOKEN || (env.RESEND_API_KEY && env.RESET_EMAIL_FROM)) && !emailSent) throw new HttpError(502, 'Your message was saved for the shop, but email delivery failed. Please try again later.');
+  return json({ ok: true, emailSent }, 201);
 }
 
 async function checkout({ env, request, user }) {
@@ -301,7 +323,11 @@ async function customerOrders({ env, user }) {
 }
 
 async function customerProfile({ env, user }) {
-  const profile = await env.DB.prepare('SELECT username, email, name, phone, address, city, postal_code, country FROM users WHERE id = ?').bind(user.id).first();
+  const profile = await env.DB.prepare('SELECT username, email, name, phone, address, city, postal_code, country, password_hash, google_sub FROM users WHERE id = ?').bind(user.id).first();
+  profile.hasPassword = String(profile.password_hash).startsWith('pbkdf2$');
+  profile.hasGoogle = Boolean(profile.google_sub);
+  delete profile.password_hash;
+  delete profile.google_sub;
   return json({ profile });
 }
 
@@ -310,6 +336,68 @@ async function updateCustomerProfile({ env, request, user }) {
   await env.DB.prepare('UPDATE users SET name = ?, email = ?, phone = ?, address = ?, city = ?, postal_code = ?, country = ? WHERE id = ?')
     .bind(name, e, prof.phone, prof.address, prof.city, prof.postal_code, prof.country, user.id).run();
   return customerProfile({ env, user });
+}
+
+async function sendCustomerPasswordCode({ env, user }) {
+  if (!(env.GMAIL_REFRESH_TOKEN && (env.GMAIL_CLIENT_ID || env.GOOGLE_CLIENT_ID) && (env.GMAIL_CLIENT_SECRET || env.GOOGLE_CLIENT_SECRET)) && !(env.RESEND_API_KEY && env.RESET_EMAIL_FROM)) throw new HttpError(503, 'Email sending is not configured. Ask the site owner to connect Gmail or Resend.');
+  const account = await env.DB.prepare('SELECT email, google_sub FROM users WHERE id = ? AND role = \'customer\'').bind(user.id).first();
+  if (!account) throw new HttpError(404, 'Account not found');
+  if (!account.google_sub) throw new HttpError(403, 'This account must be changed using its current password');
+  const timestamp = now(), existing = await env.DB.prepare('SELECT last_sent_at, window_started_at, send_count FROM password_reset_codes WHERE user_id = ?').bind(user.id).first();
+  if (existing && timestamp - existing.last_sent_at < 60) throw new HttpError(429, 'Please wait before requesting another code');
+  if (existing && timestamp - existing.window_started_at < 3600 && existing.send_count >= 5) throw new HttpError(429, 'Too many codes requested. Try again in an hour');
+  const bytes = randomBytes(4), number = ((bytes[0] * 0x1000000) + (bytes[1] << 16) + (bytes[2] << 8) + bytes[3]) % 1000000;
+  const code = String(number).padStart(6, '0'), codeHash = await sha256hex(`${user.id}:${code}:${env.RESEND_API_KEY}`);
+  await env.DB.prepare(`INSERT INTO password_reset_codes (user_id, code_hash, created_at, expires_at, attempts, last_sent_at, window_started_at, send_count, consumed_at)
+    VALUES (?, ?, ?, ?, 0, ?, ?, 1, 0) ON CONFLICT(user_id) DO UPDATE SET code_hash = excluded.code_hash, created_at = excluded.created_at,
+    expires_at = excluded.expires_at, attempts = 0, last_sent_at = excluded.last_sent_at,
+    window_started_at = CASE WHEN password_reset_codes.window_started_at < ? THEN excluded.window_started_at ELSE password_reset_codes.window_started_at END,
+    send_count = CASE WHEN password_reset_codes.window_started_at < ? THEN 1 ELSE password_reset_codes.send_count + 1 END, consumed_at = 0`)
+    .bind(user.id, codeHash, timestamp, timestamp + 600, timestamp, timestamp, timestamp - 3600, timestamp - 3600).run();
+  let emailSent = false;
+  try { emailSent = await sendShopEmail(env, { to: account.email, subject: 'Your Flex password verification code', text: `Your verification code is ${code}. It expires in 10 minutes. If you did not request this, ignore this email.` }); } catch (_) {}
+  if (!emailSent) {
+    await env.DB.prepare('DELETE FROM password_reset_codes WHERE user_id = ?').bind(user.id).run();
+    throw new HttpError(502, 'Could not send the email. Please try again later');
+  }
+  return json({ ok: true });
+}
+
+async function changeCustomerPassword({ env, request, user }) {
+  const b = await body(request), next = password(b.newPassword);
+  const account = await env.DB.prepare('SELECT password_hash, google_sub FROM users WHERE id = ? AND role = \'customer\'').bind(user.id).first();
+  if (!account) throw new HttpError(404, 'Account not found');
+  const hasPassword = String(account.password_hash).startsWith('pbkdf2$');
+  const linkedGoogle = Boolean(account.google_sub), current = typeof b.currentPassword === 'string' ? b.currentPassword.slice(0, 128) : '', resetCode = typeof b.resetCode === 'string' ? b.resetCode.trim() : '';
+  let codeRow;
+  if (!linkedGoogle || (hasPassword && current)) {
+    if (!hasPassword || resetCode) throw bad('Enter exactly one valid password verification method');
+    if (!(await verifyPassword(current, account.password_hash))) throw new HttpError(401, 'Current password is incorrect');
+    if (current === next) throw bad('Choose a password different from your current one');
+  } else {
+    if (!linkedGoogle || !/^\d{6}$/.test(resetCode) || current) throw bad('Enter the verification code sent to your email');
+    codeRow = await env.DB.prepare('SELECT code_hash, expires_at, attempts, consumed_at FROM password_reset_codes WHERE user_id = ?').bind(user.id).first();
+    if (!codeRow || codeRow.expires_at <= now() || codeRow.consumed_at || codeRow.attempts >= 5) throw new HttpError(401, 'Verification code is invalid or expired');
+    const codeHash = await sha256hex(`${user.id}:${resetCode}:${env.RESEND_API_KEY || ''}`);
+    if (!safeEqual(enc.encode(codeHash), enc.encode(codeRow.code_hash))) {
+      await env.DB.prepare('UPDATE password_reset_codes SET attempts = attempts + 1 WHERE user_id = ? AND consumed_at = 0').bind(user.id).run();
+      throw new HttpError(401, 'Verification code is incorrect');
+    }
+  }
+  const token = cookie(request, 'flex_session');
+  if (!token) throw new HttpError(401, 'Please sign in again');
+  const tokenHash = await sha256hex(token), newHash = await hashPassword(next);
+  if (codeRow) {
+    const consumed = await env.DB.prepare('UPDATE password_reset_codes SET consumed_at = ? WHERE user_id = ? AND expires_at > ? AND consumed_at = 0 AND attempts < 5')
+      .bind(now(), user.id, now()).run();
+    if (!consumed.meta.changes) throw new HttpError(401, 'Verification code is invalid or expired');
+  }
+  await env.DB.batch([
+    env.DB.prepare('UPDATE users SET password_hash = ?, failed_attempts = 0, locked_until = 0 WHERE id = ?').bind(newHash, user.id),
+    env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(user.id, tokenHash),
+  ]);
+  await audit(env, user, 'account.password_change');
+  return json({ ok: true, hasPassword: true });
 }
 
 async function cancelCustomerOrder({ env, user, params }) {
@@ -810,6 +898,8 @@ add('POST', '/api/orders', checkout, 'customer');
 add('GET', '/api/orders', customerOrders, 'customer');
 add('GET', '/api/account/profile', customerProfile, 'customer');
 add('PUT', '/api/account/profile', updateCustomerProfile, 'customer');
+add('POST', '/api/account/password', changeCustomerPassword, 'customer');
+add('POST', '/api/account/password-code', sendCustomerPasswordCode, 'customer');
 add('POST', '/api/orders/:id/cancel', cancelCustomerOrder, 'customer');
 add('GET', '/api/admin/stats', stats, 'staff');
 add('GET', '/api/admin/products', adminProducts, 'staff');

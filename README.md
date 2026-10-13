@@ -86,6 +86,7 @@ account id, never by email, so a Google account can't take over a password accou
 
 - Adding to the bag, opening the bag and checking out all require a login. The visitor's action is remembered and completed after they log in, register or return from Google.
 - Each account has its own bag (kept in the browser). Registering collects name, email, phone and address; orders keep a copy of the phone and shipping address.
+- Customers can edit their profile and delivery details, review orders, cancel pending orders, and change their password from the account panel. Google-linked accounts can verify with their current password or a 6-digit code emailed to their Google account address. Other accounts must enter their current password.
 - Customers register on `register.html`; staff and admins are only created by an admin under **Users**.
 
 ## Run locally
@@ -96,6 +97,18 @@ npx wrangler d1 execute flex-db --local --file=schema.sql
 npx wrangler d1 execute flex-db --local --file=seed.sql
 npx wrangler pages dev          # http://localhost:8788
 ```
+
+## Gmail sending (feedback + password codes)
+
+The site can send feedback notifications and password verification codes from `flexshopcompany@gmail.com` using Gmail API. Enable Gmail API in Google Cloud, add the `https://www.googleapis.com/auth/gmail.send` scope to the OAuth consent screen, and create a **separate** OAuth web client for Gmail (so the store sign-in client is untouched). Add `https://developers.google.com/oauthplayground` as its authorized redirect URI. In OAuth Playground settings select **Use your own OAuth credentials**, enter the Gmail client ID and secret, authorize the `gmail.send` scope as `flexshopcompany@gmail.com`, exchange the code for tokens, and save the refresh token and separate client credentials as Cloudflare Pages secrets:
+
+```bash
+npx wrangler pages secret put GMAIL_REFRESH_TOKEN --project-name flex-shop
+npx wrangler pages secret put GMAIL_CLIENT_ID --project-name flex-shop
+npx wrangler pages secret put GMAIL_CLIENT_SECRET --project-name flex-shop
+```
+
+The `gmail.send` scope is sensitive. In OAuth consent screen, an External app left in Testing can have refresh tokens expire after 7 days; for ongoing production use, publish the consent screen and complete Google's required verification. Keep refresh tokens private and never put them in browser code or commit them. Existing Resend settings remain as a fallback.
 Safari does not keep `Secure` cookies over plain http://localhost; use Chrome or Firefox locally.
 
 ## Tests
@@ -121,7 +134,7 @@ that emulates the D1 interface: auth, lockout, roles, checkout/stock/rollback, c
 - Passwords are salted PBKDF2-SHA256 hashes. **Nobody, including admins, can view a password**; admins can only set a new one.
 - Sessions are random tokens in an `HttpOnly; Secure; SameSite=Strict` cookie; only the SHA-256 of the token is stored.
 - Roles: `customer` (shop, checkout), `staff` (products, orders, drops, messages), `admin` (everything, incl. users and audit).
-- 5 failed sign-ins lock an account for 15 minutes. Changing a user's role/status or password signs them out everywhere.
+- 5 failed sign-ins lock an account for 15 minutes. Admin password resets sign the affected user out everywhere; a customer password change keeps the current session and signs out other sessions.
 - Every query uses bound parameters. Prices are always read from the database at checkout, never from the browser.
 - Stock has a `CHECK (stock >= 0)` constraint and checkout is one atomic batch, so two buyers can't take the last unit.
 - Add **Cloudflare Access** in front of `/admin*` for a second login layer (Zero Trust > Access > Applications).
@@ -129,6 +142,5 @@ that emulates the D1 interface: auth, lockout, roles, checkout/stock/rollback, c
 ## Not included yet
 
 - Payments: checkout records the order; connect Stripe (or another processor) before charging real money.
-- Email: no verification, password-reset email, or order confirmations (Cloudflare Email Workers / Resend can add these).
-- Profile editing: customers can't yet change their phone/address after registering (an admin can't either; only name, username, email, role and status are editable).
+- Email: account email verification and order confirmations are not included. Resend is used only for Google-linked password verification codes.
 - Image resizing: photos are stored and served as uploaded; resize before uploading for fast pages (Cloudflare Images can automate this later).
