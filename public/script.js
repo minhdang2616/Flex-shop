@@ -40,6 +40,12 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   function openAccount(msg) {
     closeAll(); accountModal.classList.add('open'); overlay.classList.add('open');
+    $('accountTitle').textContent = user ? 'Your account' : 'Log in';
+    ['myOrdersBtn', 'editProfileBtn'].forEach(function (id) { var b = $(id); if (b) { b.hidden = false; b.disabled = false; b.textContent = id === 'myOrdersBtn' ? 'My orders' : 'Edit profile & delivery'; } });
+    var orderHistory = $('orderHistory'); if (orderHistory) orderHistory.remove();
+    var profileForm = $('profileForm'); if (profileForm) profileForm.remove();
+    if ($('accountHello')) $('accountHello').hidden = false;
+    if ($('logoutBtn')) $('logoutBtn').hidden = false;
     var n = $('authNote'); if (n) { n.textContent = msg || ''; n.hidden = !msg; }
     var m = $('loginMsg'); if (m) { m.textContent = ''; m.classList.remove('show'); }
     paintAuthLinks();
@@ -81,18 +87,66 @@ document.addEventListener('DOMContentLoaded', function () {
     if (signIn) signIn.textContent = user ? 'Sign Out' : 'Sign In';
     $('accountBtn').setAttribute('aria-label', user ? 'Account: ' + user.name : 'Account');
     $('authPanel').hidden = !!user; $('accountInfo').hidden = !user;
-    if (user) $('accountHello').textContent = 'Signed in as ' + user.name + ' (@' + user.username + ')';
+    if (user) {
+      $('accountHello').textContent = 'Signed in as ' + user.name + ' (@' + user.username + ')';
+      if (!$('myOrdersBtn')) $('accountInfo').insertAdjacentHTML('afterbegin', '<button class="cta ghost" id="myOrdersBtn" type="button" style="width:100%;margin:0 0 10px">My orders</button>');
+      if (!$('editProfileBtn')) $('accountInfo').insertAdjacentHTML('afterbegin', '<button class="cta ghost" id="editProfileBtn" type="button" style="width:100%;margin:0 0 10px">Edit profile & delivery</button>');
+    }
     $('accountTitle').textContent = user ? 'Your account' : 'Log in';
   }
   async function logout() { try { await api('POST', '/auth/logout'); } catch (e) {} user = null; cart = []; note = ''; lastOrder = ''; paintUser(); renderCart(); }
   $('signInLink').addEventListener('click', function (e) { e.preventDefault(); if (user) { logout(); closeAll(); } else openAccount(); });
   $('logoutBtn').addEventListener('click', function () { logout(); closeAll(); });
+  $('accountInfo').addEventListener('click', async function (e) {
+    if (e.target.id === 'editProfileBtn') {
+      var editBtn = e.target; editBtn.disabled = true; editBtn.textContent = 'Loading…';
+      try {
+        var data = await api('GET', '/account/profile'), p = data.profile;
+        openAccount(); $('accountTitle').textContent = 'Profile & delivery';
+        $('accountHello').hidden = true; $('myOrdersBtn').hidden = true; $('editProfileBtn').hidden = true; $('logoutBtn').hidden = true;
+        var form = document.createElement('form'); form.id = 'profileForm'; form.innerHTML =
+          '<div class="field"><label for="pfName">Full name</label><input id="pfName" name="name" required maxlength="100" value="' + esc(p.name) + '"></div>' +
+          '<div class="field"><label for="pfEmail">Email</label><input id="pfEmail" name="email" type="email" required value="' + esc(p.email) + '"></div>' +
+          '<div class="field"><label for="pfPhone">Phone</label><input id="pfPhone" name="phone" required maxlength="20" value="' + esc(p.phone) + '"></div>' +
+          '<div class="field"><label for="pfAddress">Street address</label><input id="pfAddress" name="address" required maxlength="200" value="' + esc(p.address) + '"></div>' +
+          '<div class="field"><label for="pfCity">City</label><input id="pfCity" name="city" required maxlength="100" value="' + esc(p.city) + '"></div>' +
+          '<div class="field"><label for="pfPostal">Postal code</label><input id="pfPostal" name="postalCode" maxlength="20" value="' + esc(p.postal_code) + '"></div>' +
+          '<div class="field"><label for="pfCountry">Country</label><input id="pfCountry" name="country" required maxlength="100" value="' + esc(p.country) + '"></div>' +
+          '<p class="formmsg" id="profileMsg" role="alert"></p><button class="cta dark" type="submit" style="width:100%">Save profile</button>';
+        $('accountInfo').appendChild(form);
+        form.addEventListener('submit', async function (ev) {
+          ev.preventDefault(); var save = form.querySelector('button[type=submit]'), msg = $('profileMsg'); save.disabled = true; msg.classList.add('show'); msg.textContent = 'Saving…';
+          try { var updated = await api('PUT', '/account/profile', Object.fromEntries(new FormData(form).entries())); user.name = updated.profile.name; user.email = updated.profile.email; paintUser(); msg.textContent = 'Profile saved.'; }
+          catch (err) { msg.textContent = err.message; save.disabled = false; }
+        });
+      } catch (err) { editBtn.disabled = false; editBtn.textContent = 'Edit profile & delivery'; }
+      return;
+    }
+    if (e.target.id !== 'myOrdersBtn') return;
+    var btn = e.target; btn.disabled = true; btn.textContent = 'Loading orders…';
+    try {
+      var r = await api('GET', '/orders');
+      var rows = r.orders.map(function (o) { return '<li style="display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--g200)"><span><strong>' + esc(o.order_no) + '</strong><br><small>' + esc(new Date(o.created_at * 1000).toLocaleDateString()) + ' · ' + o.items + ' items · ' + esc(o.status) + '</small>' + (o.status === 'pending' ? '<br><button class="remove" data-cancel-order="' + o.id + '" type="button">Cancel order</button>' : '') + '</span><strong>' + money(o.total_cents) + '</strong></li>'; }).join('');
+      openAccount(); $('accountTitle').textContent = 'Your orders'; $('authPanel').hidden = true;
+      $('accountHello').hidden = true; btn.hidden = true; $('logoutBtn').hidden = true;
+      var list = $('orderHistory');
+      if (!list) { list = document.createElement('div'); list.id = 'orderHistory'; $('accountInfo').appendChild(list); }
+      list.innerHTML = rows ? '<ul style="list-style:none;padding:0;margin:0;max-height:55vh;overflow:auto">' + rows + '</ul>' : '<p class="cart-empty">You have not placed an order yet.</p>';
+    } catch (err) { btn.disabled = false; btn.textContent = 'My orders'; }
+  });
+  $('accountInfo').addEventListener('click', async function (e) {
+    var b = e.target.closest('[data-cancel-order]'); if (!b) return;
+    if (!confirm('Cancel this pending order? The reserved items will return to stock.')) return;
+    b.disabled = true;
+    try { await api('POST', '/orders/' + b.dataset.cancelOrder + '/cancel'); $('myOrdersBtn').click(); }
+    catch (err) { b.disabled = false; b.textContent = err.message; }
+  });
 
   var loginForm = $('loginForm'), loginMsg = $('loginMsg');
   loginForm.addEventListener('submit', async function (e) {
     e.preventDefault(); loginMsg.classList.add('show'); loginMsg.textContent = 'Please wait...';
     try {
-      var r = await api('POST', '/auth/login', { username: $('lusername').value, password: $('lpass').value });
+      var r = await api('POST', '/auth/login', { username: $('lusername').value, password: $('lpass').value, scope: 'customer' });
       user = r.user; loginForm.reset(); loginMsg.textContent = ''; loginMsg.classList.remove('show');
       paintUser(); loadCart(); renderCart(); applyPending();      // resumes "add to bag" / "open my bag" if that is what they were doing
     } catch (err) { loginMsg.textContent = err.message; }
@@ -105,7 +159,8 @@ document.addEventListener('DOMContentLoaded', function () {
     google_failed: "We couldn't sign you in with Google. Please try again.",
     google_state: 'That sign-in attempt expired. Please try again.',
     google_unverified: 'Your Google email address is not verified, so it cannot be used here.',
-    account_disabled: 'This account is disabled.'
+    account_disabled: 'This account is disabled.',
+    account_role: 'This Google account is linked to a staff account and cannot be used for customer sign-in.'
   };
   function showAuthErrorFromUrl() {
     var qs = new URLSearchParams(location.search), code = qs.get('auth_error'); if (!code) return;
@@ -127,12 +182,22 @@ document.addEventListener('DOMContentLoaded', function () {
       '<button class="addcart" data-id="' + p.id + '" data-name="' + esc(p.name) + '" data-price="' + p.price_cents + '" data-stock="' + p.stock + '" data-image="' + esc(p.image_url || '') + '"' + (sold ? ' disabled' : '') + '>' + (sold ? 'Sold out' : 'Add to bag') + '</button></div>';
   }
   var searchTerm = (new URLSearchParams(location.search).get('q') || '').trim();
-  document.querySelectorAll('.grid[data-department], .grid[data-featured], .grid[data-search]').forEach(function (grid) {
+  var sortTerm = new URLSearchParams(location.search).get('sort') || 'featured';
+  var catalogGrids = document.querySelectorAll('.grid[data-department], .grid[data-featured], .grid[data-search]');
+  if (catalogGrids.length) {
+    var sortBar = document.createElement('div'); sortBar.className = 'catalog-tools';
+    sortBar.innerHTML = '<label for="catalogSort">Sort by</label><select id="catalogSort"><option value="featured">Featured</option><option value="newest">Newest</option><option value="price_asc">Price: low to high</option><option value="price_desc">Price: high to low</option><option value="name">Name: A to Z</option></select>';
+    catalogGrids[0].parentNode.insertBefore(sortBar, catalogGrids[0]);
+    $('catalogSort').value = sortTerm;
+    $('catalogSort').addEventListener('change', function () { var qs = new URLSearchParams(location.search); if (this.value === 'featured') qs.delete('sort'); else qs.set('sort', this.value); location.search = qs.toString(); });
+  }
+  Array.prototype.forEach.call(catalogGrids, function (grid) {
     var q = [];
     if (grid.dataset.search) q.push('q=' + encodeURIComponent(searchTerm));
     if (grid.dataset.department) q.push('department=' + encodeURIComponent(grid.dataset.department));
     if (grid.dataset.category) q.push('category=' + encodeURIComponent(grid.dataset.category));
     if (grid.dataset.featured) q.push('featured=1');
+    if (sortTerm !== 'featured') q.push('sort=' + encodeURIComponent(sortTerm));
     grid.innerHTML = '<p class="empty-note">Loading...</p>';
     api('GET', '/products?' + q.join('&')).then(function (r) {
       var summary = $('searchSummary');

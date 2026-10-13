@@ -98,18 +98,22 @@ function cookie(request, name) {
   const m = (request.headers.get('cookie') || '').split(/;\s*/).find((c) => c.startsWith(name + '='));
   return m ? m.slice(name.length + 1) : null;
 }
-const sessionCookie = (token, maxAge) => `flex_session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${maxAge}`;
+const sessionCookie = (token, maxAge, scope = 'customer') => `${scope === 'admin' ? 'flex_admin_session' : 'flex_session'}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${maxAge}`;
 
-async function currentUser(env, request) {
-  const token = cookie(request, 'flex_session');
+async function currentUser(env, request, scope = 'customer') {
+  const token = cookie(request, scope === 'admin' ? 'flex_admin_session' : 'flex_session');
   if (!token) return null;
   const row = await env.DB.prepare(
     `SELECT u.id, u.username, u.email, u.name, u.role, u.status FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.expires_at > ?`
   ).bind(await sha256hex(token), now()).first();
-  return row && row.status === 'active' ? row : null;
+  if (!row || row.status !== 'active') return null;
+  // Never interpret a legacy or admin session as a storefront customer session.
+  if (scope === 'customer' && row.role !== 'customer') return null;
+  if (scope === 'admin' && row.role === 'customer') return null;
+  return row;
 }
-async function startSession(env, user) {
+async function startSession(env, user, scope = user.role === 'customer' ? 'customer' : 'admin') {
   const token = b64url(randomBytes(32));
   const ttl = user.role === 'customer' ? CUSTOMER_SESSION : STAFF_SESSION;
   await env.DB.batch([
@@ -117,7 +121,7 @@ async function startSession(env, user) {
     env.DB.prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
       .bind(await sha256hex(token), user.id, now(), now() + ttl),
   ]);
-  return sessionCookie(token, ttl);
+  return sessionCookie(token, ttl, scope);
 }
 const publicUser = (u) => ({ id: u.id, name: u.name, username: u.username, email: u.email, role: u.role });
 const audit = (env, actor, action, detail = '') =>
@@ -161,7 +165,7 @@ async function register({ env, request }) {
 }
 
 // Checks a password against one user row, with lockout, then starts a session.
-async function authenticate(env, u, pw, failMessage) {
+async function authenticate(env, u, pw, failMessage, scope = 'customer') {
   if (!u) { await verifyPassword(pw, DUMMY_HASH); throw new HttpError(401, failMessage); }
   if (u.locked_until > now()) throw new HttpError(429, 'Too many failed attempts. Try again in a few minutes.');
   if (!(await verifyPassword(pw, u.password_hash))) {
@@ -171,20 +175,25 @@ async function authenticate(env, u, pw, failMessage) {
     throw new HttpError(401, failMessage);
   }
   if (u.status !== 'active') throw new HttpError(403, 'This account is disabled');
+  if (scope === 'admin' && u.role === 'customer') throw new HttpError(403, 'This account does not have admin access');
+  if (scope === 'customer' && u.role !== 'customer') throw new HttpError(403, 'Admin and staff accounts must sign in at the admin portal');
   await env.DB.prepare('UPDATE users SET failed_attempts = 0, locked_until = 0, last_login_at = ? WHERE id = ?').bind(now(), u.id).run();
-  return json({ user: publicUser(u) }, 200, { 'Set-Cookie': await startSession(env, u) });
+  return json({ user: publicUser(u) }, 200, { 'Set-Cookie': await startSession(env, u, scope) });
 }
 
 async function login({ env, request }) {
   const b = await body(request);
   const u = await env.DB.prepare('SELECT * FROM users WHERE username = ?').bind(username(b.username)).first();
-  return authenticate(env, u, typeof b.password === 'string' ? b.password.slice(0, 128) : '', 'Invalid username or password');
+  const scope = b.scope === 'admin' || (!b.scope && u && u.role !== 'customer') ? 'admin' : 'customer';
+  return authenticate(env, u, typeof b.password === 'string' ? b.password.slice(0, 128) : '', 'Invalid username or password', scope);
 }
 
 async function logout({ env, request }) {
-  const token = cookie(request, 'flex_session');
+  const scope = new URL(request.url).searchParams.get('scope') === 'admin' ? 'admin' : 'customer';
+  const name = scope === 'admin' ? 'flex_admin_session' : 'flex_session';
+  const token = cookie(request, name);
   if (token) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256hex(token)).run();
-  return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) });
+  return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0, scope) });
 }
 
 const me = async ({ user }) => json({ user: user ? publicUser(user) : null });
@@ -204,7 +213,9 @@ async function listProducts({ env, url }) {
     sql += " AND (p.name LIKE ? ESCAPE '\\' OR p.name LIKE ? ESCAPE '\\' OR p.category LIKE ? ESCAPE '\\' OR p.department LIKE ? ESCAPE '\\')";
     binds.push(safe + '%', '% ' + safe + '%', safe + '%', safe + '%');
   }
-  const { results } = await env.DB.prepare(sql + ' ORDER BY p.id').bind(...binds).all();
+  const sorts = { featured: 'p.featured DESC, p.id DESC', newest: 'p.id DESC', price_asc: 'p.price_cents ASC, p.id DESC', price_desc: 'p.price_cents DESC, p.id DESC', name: 'p.name COLLATE NOCASE ASC' };
+  const orderBy = sorts[url.searchParams.get('sort')] || (url.searchParams.get('featured') === '1' ? sorts.featured : 'p.id DESC');
+  const { results } = await env.DB.prepare(sql + ' ORDER BY ' + orderBy + ' LIMIT 100').bind(...binds).all();
   return json({ products: results });
 }
 
@@ -278,6 +289,39 @@ async function checkout({ env, request, user }) {
     throw err;
   }
   return json({ orderNo: no, totalCents: total }, 201);
+}
+
+async function customerOrders({ env, user }) {
+  const { results } = await env.DB.prepare(`SELECT o.id, o.order_no, o.total_cents, o.status, o.created_at,
+    (SELECT COALESCE(SUM(qty),0) FROM order_items WHERE order_id = o.id) AS items
+    FROM orders o WHERE o.user_id = ? ORDER BY o.id DESC LIMIT 50`).bind(user.id).all();
+  return json({ orders: results });
+}
+
+async function customerProfile({ env, user }) {
+  const profile = await env.DB.prepare('SELECT username, email, name, phone, address, city, postal_code, country FROM users WHERE id = ?').bind(user.id).first();
+  return json({ profile });
+}
+
+async function updateCustomerProfile({ env, request, user }) {
+  const b = await body(request), name = str(b.name, 'Name', 1, 100), e = email(b.email), prof = profileFields(b);
+  await env.DB.prepare('UPDATE users SET name = ?, email = ?, phone = ?, address = ?, city = ?, postal_code = ?, country = ? WHERE id = ?')
+    .bind(name, e, prof.phone, prof.address, prof.city, prof.postal_code, prof.country, user.id).run();
+  return customerProfile({ env, user });
+}
+
+async function cancelCustomerOrder({ env, user, params }) {
+  const id = int(params.id, 'Order', 1, 1e9);
+  const order = await env.DB.prepare('SELECT order_no, status FROM orders WHERE id = ? AND user_id = ?').bind(id, user.id).first();
+  if (!order) throw new HttpError(404, 'Order not found');
+  if (order.status !== 'pending') throw new HttpError(409, 'Only pending orders can be cancelled');
+  const { results: items } = await env.DB.prepare('SELECT product_id, qty FROM order_items WHERE order_id = ? AND product_id IS NOT NULL').bind(id).all();
+  const stmts = items.map((item) => env.DB.prepare(`UPDATE products SET stock = stock + ?, updated_at = ? WHERE id = ?
+    AND EXISTS (SELECT 1 FROM orders WHERE id = ? AND status = 'pending')`).bind(item.qty, now(), item.product_id, id));
+  stmts.push(env.DB.prepare("UPDATE orders SET status = 'cancelled' WHERE id = ? AND user_id = ? AND status = 'pending'").bind(id, user.id));
+  const changes = await env.DB.batch(stmts);
+  if (!changes[changes.length - 1].meta.changes) throw new HttpError(409, 'This order has already been updated');
+  return json({ ok: true, orderNo: order.order_no });
 }
 
 // ---------- admin handlers ----------
@@ -685,7 +729,9 @@ async function googleCallback({ env, request, url }) {
     if (existing) {
       if (existing.status !== 'active') return fail('account_disabled');
       await env.DB.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').bind(now(), existing.id).run();
-      return redirect(next, [clear, await startSession(env, existing)]);
+      // Google sign-in is a storefront flow; never create an admin-scoped cookie here.
+      if (existing.role !== 'customer') return fail('account_role');
+      return redirect(next, [clear, await startSession(env, existing, 'customer')]);
     }
     // First time with Google: park the verified identity and ask for the personal details.
     // (We never match on email: email isn't verified on password accounts, so that would allow account takeover.)
@@ -729,7 +775,7 @@ async function googleComplete({ env, request }) {
   }
   await env.DB.prepare('DELETE FROM oauth_pending WHERE token_hash = ?').bind(p.token_hash).run();
   const user = { id, username: un, email: p.email, name, role: 'customer' };
-  return jsonCookies({ user: publicUser(user) }, 201, [await startSession(env, user), pendingCookie('', 0)]);
+  return jsonCookies({ user: publicUser(user) }, 201, [await startSession(env, user, 'customer'), pendingCookie('', 0)]);
 }
 
 // ---------- router ----------
@@ -751,6 +797,10 @@ add('GET', '/api/drops', listDropsPublic, 'public');
 add('POST', '/api/drops/:id/subscribe', subscribe, 'customer');
 add('POST', '/api/contact', contact, 'public');
 add('POST', '/api/orders', checkout, 'customer');
+add('GET', '/api/orders', customerOrders, 'customer');
+add('GET', '/api/account/profile', customerProfile, 'customer');
+add('PUT', '/api/account/profile', updateCustomerProfile, 'customer');
+add('POST', '/api/orders/:id/cancel', cancelCustomerOrder, 'customer');
 add('GET', '/api/admin/stats', stats, 'staff');
 add('GET', '/api/admin/products', adminProducts, 'staff');
 add('POST', '/api/admin/products', createProduct, 'staff');
@@ -795,8 +845,9 @@ export async function onRequest({ request, env }) {
       if (r.method === method) { match = { r, params: m.groups || {} }; break; }
     }
     if (!match) throw new HttpError(pathMatched ? 405 : 404, pathMatched ? 'Method not allowed' : 'Not found');
-    const user = await currentUser(env, request);
     const { access } = match.r;
+    const authScope = access === 'staff' || access === 'admin' || (url.pathname === '/api/auth/me' && url.searchParams.get('scope') === 'admin') ? 'admin' : 'customer';
+    const user = await currentUser(env, request, authScope);
     if (access !== 'public') {
       if (!user) throw new HttpError(401, 'Please sign in');
       const allowed = { customer: ['customer', 'staff', 'admin'], staff: ['staff', 'admin'], admin: ['admin'] }[access];

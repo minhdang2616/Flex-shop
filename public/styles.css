@@ -92,6 +92,8 @@ main{overflow-x:hidden;}
 .catgroup{padding:64px 0;border-bottom:1px solid var(--border);}
 .shop h2,.catgroup h2{font-size:clamp(28px,4vw,40px);margin:0 0 32px;max-width:16ch;}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;}
+.catalog-tools{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:-14px 0 24px;font-size:13px;font-weight:600;}
+.catalog-tools select{padding:10px 34px 10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--white);color:var(--ink);font:inherit;cursor:pointer;}
 .card{background:var(--white);display:flex;flex-direction:column;gap:6px;}
 .card .swatch{width:100%;aspect-ratio:4/5;background:var(--g100);position:relative;overflow:hidden;}
 .card .swatch::after{content:"";position:absolute;inset:0;background:linear-gradient(155deg,transparent 0%,transparent 62%,var(--swatch-c,var(--blue)) 62%,var(--swatch-c,var(--blue)) 100%);opacity:0.9;}

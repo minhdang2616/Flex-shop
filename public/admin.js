@@ -31,12 +31,11 @@
   $('loginForm').addEventListener('submit', async function (e) {
     e.preventDefault(); $('loginErr').textContent = '';
     try {
-      var r = await api('POST', '/auth/login', { username: $('un').value, password: $('pw').value });
-      if (r.user.role === 'customer') { await api('POST', '/auth/logout').catch(function () {}); throw new Error('This account does not have admin access.'); }
+      var r = await api('POST', '/auth/login', { username: $('un').value, password: $('pw').value, scope: 'admin' });
       $('pw').value = ''; showApp(r.user);
     } catch (err) { $('loginErr').textContent = err.message; }
   });
-  $('logoutBtn').addEventListener('click', async function () { await api('POST', '/auth/logout').catch(function () {}); showLogin(); });
+  $('logoutBtn').addEventListener('click', async function () { await api('POST', '/auth/logout?scope=admin').catch(function () {}); showLogin(); });
   $('themeBtn').addEventListener('click', function () {
     var r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme:dark)').matches;
     r.dataset.theme = dark ? 'light' : 'dark';
@@ -60,23 +59,24 @@
       cache.products = (await api('GET', '/admin/products')).products;
       var rows = cache.products.map(function (p) {
         var thumb = p.image_url ? '<img class="thumb" src="' + esc(p.image_url) + '" alt="" loading="lazy">' : '<span class="thumb thumb-empty" style="--swatch-c:var(--' + esc(p.color) + ');"></span>';
-        return '<tr><td><div style="display:flex;align-items:center;gap:10px;">' + thumb + '<div><strong>' + esc(p.name) + '</strong><div class="sub">' + esc(p.sku) + (p.image_count ? ' &middot; ' + p.image_count + ' photo' + (p.image_count > 1 ? 's' : '') : ' &middot; no photos') + '</div></div></div></td><td>' + esc(p.department) + ' / ' + esc(p.category) + '</td><td>' + money(p.price_cents) + '</td>' +
+        return '<tr data-search="' + esc((p.name + ' ' + p.sku + ' ' + p.department + ' ' + p.category).toLowerCase()) + '"><td><div style="display:flex;align-items:center;gap:10px;">' + thumb + '<div><strong>' + esc(p.name) + '</strong><div class="sub">' + esc(p.sku) + (p.image_count ? ' &middot; ' + p.image_count + ' photo' + (p.image_count > 1 ? 's' : '') : ' &middot; no photos') + '</div></div></div></td><td>' + esc(p.department) + ' / ' + esc(p.category) + '</td><td>' + money(p.price_cents) + '</td>' +
           '<td class="' + (p.stock <= 10 ? 'low' : '') + '">' + p.stock + (p.stock <= 10 ? ' (low)' : '') + '</td><td>' + pill(p.status) + '</td>' +
           '<td class="r"><div class="actions"><button class="btn ghost sm" data-act="edit-product" data-id="' + p.id + '">Edit</button><button class="btn ghost sm" data-act="images-product" data-id="' + p.id + '">Images</button><button class="btn ghost sm" data-act="del-product" data-id="' + p.id + '">Delete</button></div></td></tr>';
       }).join('');
-      return '<div class="tools"><span class="who">' + cache.products.length + ' products</span><button class="btn red" data-act="add-product">Add product</button></div>' +
+      return '<div class="tools"><span class="who">' + cache.products.length + ' products</span><input id="productSearch" type="search" placeholder="Search name, SKU or category" aria-label="Search products" style="max-width:280px;padding:10px;border:1px solid var(--line);border-radius:8px"><button class="btn red" data-act="add-product">Add product</button></div>' +
         table('<th>Name</th><th>Department</th><th>Price</th><th>Stock</th><th>Status</th><th class="r">Actions</th>', rows, 'No products yet.');
     },
     orders: async function () {
       var list = (await api('GET', '/admin/orders' + (orderFilter === 'all' ? '' : '?status=' + orderFilter))).orders;
+      cache.orders = list;
       var tabs = ['all', 'pending', 'shipped', 'delivered', 'cancelled'].map(function (t) { return '<button data-act="filter" data-id="' + t + '" class="' + (t === orderFilter ? 'active' : '') + '">' + t[0].toUpperCase() + t.slice(1) + '</button>'; }).join('');
       var rows = list.map(function (o) {
         var locked = o.status === 'cancelled';
         var opts = ['pending', 'shipped', 'delivered', 'cancelled'].map(function (s) { return '<option ' + (s === o.status ? 'selected' : '') + '>' + s + '</option>'; }).join('');
-        return '<tr><td><strong>' + esc(o.order_no) + '</strong></td><td>' + esc(o.name) + '<div class="sub">' + esc(o.email) + '</div></td><td>' + when(o.created_at) + '</td><td>' + o.items + '</td><td>' + money(o.total_cents) + '</td><td>' + pill(o.status) + '</td>' +
+        return '<tr data-search="' + esc((o.order_no + ' ' + o.name + ' ' + o.email).toLowerCase()) + '"><td><strong>' + esc(o.order_no) + '</strong></td><td>' + esc(o.name) + '<div class="sub">' + esc(o.email) + '</div></td><td>' + when(o.created_at) + '</td><td>' + o.items + '</td><td>' + money(o.total_cents) + '</td><td>' + pill(o.status) + '</td>' +
           '<td class="r"><div class="actions"><button class="btn ghost sm" data-act="view-order" data-id="' + o.id + '">View</button><select class="inline-select" data-act="order-status" data-id="' + o.id + '" ' + (locked ? 'disabled' : '') + ' aria-label="Change status of ' + esc(o.order_no) + '">' + opts + '</select></div></td></tr>';
       }).join('');
-      return '<div class="tools"><div class="tabs">' + tabs + '</div></div>' + table('<th>Order</th><th>Customer</th><th>Placed</th><th>Items</th><th>Total</th><th>Status</th><th class="r">Manage</th>', rows, 'No orders here.');
+      return '<div class="tools"><div class="tabs">' + tabs + '</div><input id="orderSearch" type="search" placeholder="Search order or customer" aria-label="Search orders" style="max-width:260px;padding:10px;border:1px solid var(--line);border-radius:8px"><button class="btn ghost" data-act="export-orders">Export CSV</button></div>' + table('<th>Order</th><th>Customer</th><th>Placed</th><th>Items</th><th>Total</th><th>Status</th><th class="r">Manage</th>', rows, 'No orders here.');
     },
     users: async function () {
       cache.users = (await api('GET', '/admin/users')).users;
@@ -246,6 +246,11 @@
   $('view').addEventListener('click', async function (e) {
     var t = e.target.closest('[data-act]'); if (!t) return;
     var act = t.dataset.act, id = t.dataset.id;
+    if (act === 'export-orders') {
+      var csv = [['Order', 'Customer', 'Email', 'Created', 'Items', 'Total cents', 'Status']].concat(cache.orders.map(function (o) { return [o.order_no, o.name, o.email, new Date(o.created_at * 1000).toISOString(), o.items, o.total_cents, o.status]; }));
+      var content = csv.map(function (row) { return row.map(function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
+      var link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' })); link.download = 'flex-orders-' + new Date().toISOString().slice(0, 10) + '.csv'; link.click(); URL.revokeObjectURL(link.href); return;
+    }
     if (act === 'add-product') productModal(null);
     else if (act === 'edit-product') productModal(cache.products.find(function (p) { return p.id == id; }));
     else if (act === 'images-product') imagesModal(cache.products.find(function (p) { return p.id == id; }));
@@ -274,10 +279,15 @@
     }
     else if (act === 'del-user') { var du = cache.users.find(function (x) { return x.id == id; }); if (confirm('Delete ' + du.username + '? Their orders stay on record.')) run(api('DELETE', '/admin/users/' + id), 'User deleted'); }
   });
+  $('view').addEventListener('input', function (e) {
+    var field = e.target; if (field.id !== 'productSearch' && field.id !== 'orderSearch') return;
+    var term = field.value.trim().toLowerCase();
+    $('view').querySelectorAll('tbody tr[data-search]').forEach(function (row) { row.hidden = term && row.dataset.search.indexOf(term) === -1; });
+  });
   $('view').addEventListener('change', function (e) {
     if (e.target.dataset.act === 'order-status') run(api('PUT', '/admin/orders/' + e.target.dataset.id, { status: e.target.value }), 'Order updated');
   });
 
   // ---------- boot ----------
-  api('GET', '/auth/me').then(function (r) { if (r.user && r.user.role !== 'customer') showApp(r.user); }).catch(function () {});
+  api('GET', '/auth/me?scope=admin').then(function (r) { if (r.user && r.user.role !== 'customer') showApp(r.user); }).catch(function () {});
 })();
