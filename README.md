@@ -36,7 +36,7 @@ Sign in at `https://flex-shop.pages.dev/admin.html`. Create staff/admin/customer
 
 ## Already deployed? Update your existing database
 
-Apply only migrations that your database has not received yet, in filename order. The older migrations keep the project’s upgrade history; the later migrations add VND pricing, catalog updates, product sizes, and COD/bank QR payment support.
+Apply only migrations that your database has not received yet, in filename order. The older migrations keep the project’s upgrade history; the later migrations add VND pricing, catalog updates, product sizes, COD/bank QR, and optional VNPay support.
 
 ```bash
 npx wrangler d1 execute flex-db --remote --file=migrations/2_cau_truc_anh_san_pham.sql
@@ -60,6 +60,7 @@ npx wrangler d1 execute flex-db --remote --file=migrations/19_kich_co_san_pham.s
 npx wrangler d1 execute flex-db --remote --file=migrations/20_phuong_thuc_thanh_toan.sql
 npx wrangler d1 execute flex-db --remote --file=migrations/21_xoa_vnpay.sql
 npx wrangler d1 execute flex-db --remote --file=migrations/22_gioi_han_phuong_thuc_thanh_toan.sql
+npx wrangler d1 execute flex-db --remote --file=migrations/23_vnpay.sql
 ```
 
 Migrations `13`–`18` also update the sample apparel catalog. Do not rerun them against a database that already contains those catalog changes.
@@ -89,7 +90,18 @@ npx wrangler pages deploy
 
 ## Payment methods
 
-Checkout supports cash on delivery and direct bank transfer QR. Customers can scan `public/img/payment-qr.jpg`; the QR identifies the receiving account but does not include an order amount or reference, so checkout displays those separately. Bank transfer orders remain pending until the shop verifies the incoming transfer and marks the order paid in admin. Replace the image when the receiving account changes.
+Checkout supports cash on delivery, direct bank transfer QR, and VNPay. Direct bank QR orders remain pending until the shop verifies the incoming transfer and marks the order paid in admin. VNPay is enabled only when its merchant credentials are configured; payment status is updated from a verified VNPay IPN callback, while the browser return page is informational.
+
+### Configure VNPay
+
+Apply migration `23_vnpay.sql` to an existing database. Register a VNPay merchant/sandbox integration to receive a `TmnCode` and `HashSecret`, then add them as Cloudflare Pages secrets (never commit them):
+
+```bash
+npx wrangler pages secret put VNPAY_TMN_CODE --project-name flex-shop
+npx wrangler pages secret put VNPAY_HASH_SECRET --project-name flex-shop
+```
+
+Set the Cloudflare Pages environment variable `VNPAY_ENV` to `sandbox` while testing (the default), then deploy. Configure the VNPay IPN URL as `https://YOUR-DOMAIN/api/payments/vnpay/ipn`. After VNPay approves production access, set `VNPAY_ENV=production` and use the production credentials. The integration uses VNPay API 2.1.0 with HMAC-SHA512 signing. For sandbox onboarding and parameter requirements, see [VNPay integration docs](https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html).
 
 
 ## Google sign-in ("Continue with Google")
@@ -168,6 +180,6 @@ that emulates the D1 interface: auth, lockout, roles, checkout/stock/rollback, c
 
 ## Not included yet
 
-- Payment confirmation: bank QR transfers are confirmed manually in admin; COD is paid on delivery. Automatic payment confirmation is not connected.
+- Payment confirmation: direct bank QR transfers are confirmed manually; configured VNPay orders are updated from its verified IPN callback. COD is paid on delivery.
 - Email: account email verification and order confirmations are not included. Resend is used only for Google-linked password verification codes.
 - Image resizing: photos are stored and served as uploaded; resize before uploading for fast pages (Cloudflare Images can automate this later).

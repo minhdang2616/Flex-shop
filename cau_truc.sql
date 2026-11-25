@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS orders (
   ship_address TEXT NOT NULL DEFAULT '',
   total_cents INTEGER NOT NULL,
   status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','shipped','delivered','cancelled')),
-  payment_method TEXT NOT NULL DEFAULT 'cod' CHECK (payment_method IN ('cod','bank_qr')),
+  payment_method TEXT NOT NULL DEFAULT 'cod' CHECK (payment_method IN ('cod','bank_qr','vnpay')),
   payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending','paid','refunded')),
   created_at  INTEGER NOT NULL
 );
@@ -105,6 +105,21 @@ CREATE TABLE IF NOT EXISTS order_items (
   qty              INTEGER NOT NULL CHECK (qty > 0)
 );
 CREATE INDEX IF NOT EXISTS idx_items_order ON order_items(order_id);
+
+CREATE TABLE IF NOT EXISTS payment_attempts (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id           INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  gateway            TEXT NOT NULL CHECK (gateway IN ('vnpay')),
+  txn_ref            TEXT NOT NULL UNIQUE,
+  amount_vnd         INTEGER NOT NULL CHECK (amount_vnd > 0),
+  status             TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed')),
+  transaction_no     TEXT NOT NULL DEFAULT '',
+  bank_code          TEXT NOT NULL DEFAULT '',
+  created_at         INTEGER NOT NULL,
+  updated_at         INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_payment_attempts_order ON payment_attempts(order_id, id DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_attempts_single_pending ON payment_attempts(order_id) WHERE status = 'pending';
 
 CREATE TABLE IF NOT EXISTS drops (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,

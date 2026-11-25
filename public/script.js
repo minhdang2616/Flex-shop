@@ -5,6 +5,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function money(c) { return Math.round(c / 100).toLocaleString('vi-VN') + ' ₫'; }
+  function bankTransferMarkup(info) {
+    var amount = Number(info.amount).toLocaleString('vi-VN') + ' ₫';
+    return '<div class="bank-transfer-card"><div class="bank-transfer-qr"><img src="' + esc(info.qrUrl) + '" alt="Mã QR chuyển khoản ngân hàng cho đơn hàng" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><p class="bank-qr-error" hidden>Không tải được mã QR; bạn vẫn có thể chuyển khoản theo thông tin bên dưới.</p></div>' +
+      '<div class="bank-transfer-details"><p><span>Ngân hàng</span><strong>' + esc(info.bankId) + '</strong></p>' +
+      '<p><span>Chủ tài khoản</span><strong>' + esc(info.accountName) + '</strong></p>' +
+      '<p><span>Số tài khoản</span><strong>' + esc(info.accountNo) + '</strong><button type="button" class="copy-payment" data-copy-payment="' + esc(info.accountNo) + '">Sao chép</button></p>' +
+      '<p><span>Số tiền</span><strong>' + amount + '</strong><button type="button" class="copy-payment" data-copy-payment="' + esc(info.amount) + '">Sao chép</button></p>' +
+      '<p><span>Nội dung chuyển khoản</span><strong>' + esc(info.addInfo) + '</strong><button type="button" class="copy-payment" data-copy-payment="' + esc(info.addInfo) + '">Sao chép</button></p></div>' +
+      '<p class="bank-transfer-note">Mã QR đã điền sẵn số tiền và nội dung đơn hàng. Shop sẽ xác nhận thanh toán sau khi kiểm tra giao dịch thực tế.</p></div>';
+  }
+  document.addEventListener('click', async function (e) {
+    var button = e.target.closest('[data-copy-payment]'); if (!button) return;
+    var value = button.dataset.copyPayment, label = button.textContent;
+    try {
+      if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(value);
+      else {
+        var field = document.createElement('textarea'); field.value = value; field.style.position = 'fixed'; field.style.opacity = '0';
+        document.body.appendChild(field); field.select(); document.execCommand('copy'); field.remove();
+      }
+      button.textContent = 'Đã sao chép';
+      window.setTimeout(function () { button.textContent = label; }, 1600);
+    } catch (_) { button.textContent = 'Sao chép thủ công'; }
+  });
 
   // ---------- customer theme ----------
   var themeButton = $('themeBtn');
@@ -85,10 +108,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var action = e.target.closest('[data-account-action]'); if (!action) return;
     if (!user) { openAccount(); return; }
     if (action.dataset.accountAction === 'orders') {
-      $('accountPortalMember').hidden = true;
-      $('accountOrdersView').hidden = false;
-      $('accountOrdersContent').innerHTML = '<p>Đang tải lịch sử đơn hàng…</p>';
-      await loadCustomerOrders($('accountOrdersContent'));
+      await openCustomerOrders();
       return;
     }
     openAccount();
@@ -99,8 +119,23 @@ document.addEventListener('DOMContentLoaded', function () {
   if (ordersBack) ordersBack.addEventListener('click', function () {
     $('accountOrdersView').hidden = true;
     $('accountPortalMember').hidden = false;
+    setAccountView('');
   });
-  async function loadCustomerOrders(container) {
+  function setAccountView(view) {
+    var params = new URLSearchParams(location.search);
+    if (view) params.set('view', view); else params.delete('view');
+    history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params.toString() : '') + location.hash);
+  }
+  async function openCustomerOrders() {
+    var member = $('accountPortalMember'), view = $('accountOrdersView'), content = $('accountOrdersContent');
+    if (!member || !view || !content) return;
+    member.hidden = true;
+    view.hidden = false;
+    setAccountView('orders');
+    content.innerHTML = '<p>Đang tải lịch sử đơn hàng…</p>';
+    await loadCustomerOrders(content);
+  }
+  async function loadCustomerOrders(container, notice) {
     try {
       var r = await api('GET', '/orders');
       var statusLabels = { pending: 'Đang xác nhận', shipped: 'Đang giao hàng', delivered: 'Đã giao hàng', cancelled: 'Đã hủy' };
@@ -108,10 +143,12 @@ document.addEventListener('DOMContentLoaded', function () {
       var rows = (r.orders || []).map(function (o) {
         var progress = o.status === 'cancelled' ? '<p class="order-cancelled">Đơn hàng đã bị hủy.</p>' : '<ol class="order-progress"><li class="done">Đã đặt</li><li class="' + (o.status === 'shipped' || o.status === 'delivered' ? 'done' : '') + '">Đang giao</li><li class="' + (o.status === 'delivered' ? 'done' : '') + '">Đã nhận</li></ol>';
         var items = (o.items || []).map(function (it) { return '<li class="order-line"><span>' + esc(it.name_vi || it.name) + (it.size ? ' <small>· Cỡ ' + esc(displaySize(it.size)) + '</small>' : '') + ' <small>× ' + it.qty + '</small></span><strong>' + money(it.unit_price_cents * it.qty) + '</strong></li>'; }).join('');
-        var methodText = o.payment_method === 'bank_qr' ? 'Chuyển khoản ngân hàng bằng QR' : 'Thanh toán bằng tiền mặt khi nhận hàng';
-        return '<article class="order-card"><div class="order-card-head"><div><strong class="order-number">' + esc(o.order_no) + '</strong><small>' + esc(new Date(o.created_at * 1000).toLocaleDateString('vi-VN')) + ' · ' + o.items_count + ' sản phẩm</small></div><span class="order-status status-' + esc(o.status) + '">' + (statusLabels[o.status] || esc(o.status)) + '</span></div>' + progress + '<ul class="order-lines">' + items + '</ul><div class="order-payment"><span>' + methodText + '<br><small>Trạng thái: ' + (paymentLabels[o.payment_status] || 'Chưa thanh toán') + '</small></span><strong>Tổng: ' + money(o.total_cents) + '</strong></div>' + (o.status === 'pending' ? '<button class="remove" data-cancel-order="' + o.id + '" type="button">Hủy đơn hàng</button>' : '') + '</article>';
+        var methodText = o.payment_method === 'bank_qr' ? 'Chuyển khoản ngân hàng bằng QR' : o.payment_method === 'vnpay' ? 'Thanh toán qua VNPAY' : 'Thanh toán bằng tiền mặt khi nhận hàng';
+        var paymentHelp = o.bank_transfer ? '<details class="bank-transfer-history"><summary>Xem thông tin chuyển khoản</summary>' + bankTransferMarkup(o.bank_transfer) + '</details>' : '';
+        var orderActions = (o.payment_method === 'vnpay' && o.payment_status === 'pending' && o.status === 'pending' ? '<button class="cta ghost" data-pay-vnpay-order="' + o.id + '" type="button">Thanh toán</button>' : '') + (o.status === 'pending' ? '<button class="remove" data-cancel-order="' + o.id + '" type="button">Hủy đơn hàng</button>' : '');
+        return '<article class="order-card"><div class="order-card-head"><div><strong class="order-number">' + esc(o.order_no) + '</strong><small>' + esc(new Date(o.created_at * 1000).toLocaleDateString('vi-VN')) + ' · ' + o.items_count + ' sản phẩm</small></div><span class="order-status status-' + esc(o.status) + '">' + (statusLabels[o.status] || esc(o.status)) + '</span></div>' + progress + '<ul class="order-lines">' + items + '</ul><div class="order-payment"><span>' + methodText + '<br><small>Trạng thái: ' + (paymentLabels[o.payment_status] || 'Chưa thanh toán') + '</small></span><strong>' + money(o.total_cents) + '</strong></div>' + paymentHelp + (orderActions ? '<div class="order-actions">' + orderActions + '</div>' : '') + '</article>';
       }).join('');
-      container.innerHTML = rows || '<p class="cart-empty">Bạn chưa có đơn hàng nào.</p>';
+      container.innerHTML = (notice ? '<p class="authnote">' + esc(notice) + '</p>' : '') + (rows || '<p class="cart-empty">Bạn chưa có đơn hàng nào.</p>');
     } catch (err) {
       container.innerHTML = '<p class="order-load-error">Không tải được lịch sử đơn hàng. Vui lòng đăng nhập lại hoặc thử lại sau.</p><button class="cta ghost" id="retryCustomerOrders" type="button">Thử tải lại</button>';
       var retry = $('retryCustomerOrders'); if (retry) retry.addEventListener('click', function () { container.innerHTML = '<p>Đang tải lịch sử đơn hàng…</p>'; loadCustomerOrders(container); });
@@ -119,6 +156,19 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   var accountOrdersView = $('accountOrdersView');
   if (accountOrdersView) accountOrdersView.addEventListener('click', async function (e) {
+    var pay = e.target.closest('[data-pay-vnpay-order]');
+    if (pay) {
+      pay.disabled = true; pay.textContent = 'Đang kiểm tra giao dịch…';
+      try {
+        var payment = await api('POST', '/orders/' + pay.dataset.payVnpayOrder + '/pay-vnpay');
+        if (payment.paymentUrl) { location.href = payment.paymentUrl; return; }
+        await loadCustomerOrders($('accountOrdersContent'), payment.status === 'paid' ? 'Đơn hàng đã được xác nhận thanh toán.' : 'VNPay chưa xác nhận xong. Hãy chờ một chút rồi kiểm tra lại; không cần thanh toán lại khi giao dịch vẫn đang xử lý.');
+      } catch (err) {
+        pay.disabled = false; pay.textContent = 'Thanh toán';
+        var error = document.createElement('p'); error.className = 'order-load-error'; error.textContent = err.message; pay.insertAdjacentElement('afterend', error);
+      }
+      return;
+    }
     var cancel = e.target.closest('[data-cancel-order]'); if (!cancel) return;
     if (!confirm('Bạn muốn hủy đơn hàng đang chờ xác nhận? Sản phẩm sẽ được hoàn lại kho.')) return;
     cancel.disabled = true;
@@ -668,15 +718,20 @@ document.addEventListener('DOMContentLoaded', function () {
     try {
       var paymentOptions = await api('GET', '/payments/methods');
       var bankQrOption = (paymentOptions.methods || []).find(function (method) { return method.id === 'bank_qr'; });
+      var vnpayOption = (paymentOptions.methods || []).find(function (method) { return method.id === 'vnpay'; });
       if ($('bankQrMethod')) $('bankQrMethod').hidden = !(bankQrOption && bankQrOption.enabled);
-    } catch (_) { if ($('bankQrMethod')) $('bankQrMethod').hidden = true; }
+      if ($('vnpayMethod')) $('vnpayMethod').hidden = !(vnpayOption && vnpayOption.enabled);
+    } catch (_) { if ($('bankQrMethod')) $('bankQrMethod').hidden = true; if ($('vnpayMethod')) $('vnpayMethod').hidden = true; }
     if (!user) {
       list.innerHTML = '<p>Vui lòng đăng nhập để tiếp tục thanh toán.</p>';
       profileBox.innerHTML = '<button class="cta dark" type="button" onclick="document.getElementById(\'accountBtn\').click()">Đăng nhập</button>';
       $('placeOrderBtn').disabled = true; return;
     }
     if (!cart.length) {
-      list.innerHTML = lastOrder ? '<p class="checkout-success">Đặt hàng thành công. Mã đơn hàng: <strong>' + esc(lastOrder) + '</strong></p>' : '<p>Giỏ hàng của bạn đang trống.</p>';
+      var returnState = new URLSearchParams(location.search).get('vnpay');
+      var returnOrder = new URLSearchParams(location.search).get('order') || lastOrder;
+      var returnText = returnState === 'success' ? 'VNPAY đã xác nhận giao dịch thành công.' : returnState === 'checking' ? 'VNPAY đã nhận giao dịch. Flex đang cập nhật trạng thái đơn; vui lòng kiểm tra lịch sử đơn hàng.' : returnState === 'failed' ? 'Giao dịch chưa hoàn tất. Đơn hàng vẫn ở trạng thái chờ thanh toán.' : returnState === 'invalid' ? 'Không xác minh được kết quả trả về từ VNPAY. Vui lòng kiểm tra lịch sử đơn hàng hoặc liên hệ cửa hàng.' : '';
+      list.innerHTML = returnState ? '<p class="checkout-success">' + esc(returnText) + (returnOrder ? '<br>Mã đơn hàng: <strong>' + esc(returnOrder) + '</strong>' : '') + '</p>' : lastOrder ? '<p class="checkout-success">Đặt hàng thành công. Mã đơn hàng: <strong>' + esc(lastOrder) + '</strong></p>' : '<p>Giỏ hàng của bạn đang trống.</p>';
       profileBox.innerHTML = ''; total.textContent = money(0); $('placeOrderBtn').hidden = true; return;
     }
     $('placeOrderBtn').hidden = false; $('placeOrderBtn').disabled = true;
@@ -727,10 +782,15 @@ document.addEventListener('DOMContentLoaded', function () {
       var result = await api('POST', '/orders', { paymentMethod: paymentMethod, items: cart.map(function (i) { return { productId: i.id, qty: i.qty, size: i.size || '' }; }) });
       if (paymentMethod === 'bank_qr' && result.bankTransfer) {
         cart = []; lastOrder = result.orderNo; saveCart(); renderCart();
-        $('checkoutMessage').textContent = 'Đơn hàng ' + result.orderNo + ' đã được tạo. Quét mã và nhập đúng số tiền cùng nội dung chuyển khoản bên dưới.';
+        $('checkoutMessage').textContent = 'Đơn hàng ' + result.orderNo + ' đã được tạo. Quét mã QR bên dưới để chuyển khoản; vui lòng kiểm tra số tiền và nội dung đơn hàng trước khi xác nhận.';
         $('bankQrPayment').hidden = false;
-        $('bankQrPayment').innerHTML = '<div style="text-align:center;padding:12px 0"><img src="' + esc(result.bankTransfer.qrUrl) + '" alt="Mã QR LPBank của Flex Shop" width="280" height="314" style="display:block;max-width:100%;height:auto;margin:0 auto;border:1px solid #e4e4e4;border-radius:8px"><p><strong>' + esc(result.bankTransfer.accountName) + '</strong><br>' + esc(result.bankTransfer.bankId) + ' · ' + esc(result.bankTransfer.accountNo) + '<br>Số tiền: <strong>' + money(result.totalCents) + '</strong><br>Nội dung chuyển khoản: <strong>' + esc(result.bankTransfer.addInfo) + '</strong></p><small>QR này chưa điền sẵn số tiền và nội dung. Vui lòng nhập theo thông tin trên. Shop sẽ xác nhận thanh toán sau khi nhận tiền.</small></div>';
+        $('bankQrPayment').innerHTML = bankTransferMarkup(result.bankTransfer);
         button.hidden = true; return;
+      }
+      if (paymentMethod === 'vnpay' && result.paymentUrl) {
+        cart = []; lastOrder = result.orderNo; saveCart(); renderCart();
+        $('checkoutMessage').textContent = 'Đang chuyển đến cổng thanh toán VNPAY…';
+        location.href = result.paymentUrl; return;
       }
       cart = []; lastOrder = result.orderNo; saveCart(); $('checkoutMessage').textContent = 'Đặt hàng thành công. Mã đơn hàng: ' + result.orderNo;
       renderCart(); renderCheckoutPage();
@@ -779,6 +839,7 @@ document.addEventListener('DOMContentLoaded', function () {
   authPromise = api('GET', '/auth/me').then(function (r) { user = r.user; }, function () { user = null; }).then(function () {
     try { localStorage.removeItem('flex_cart'); } catch (e) {}       // the old shared cart from before accounts were required
     paintUser(); loadCart(); renderCart(); renderCheckoutPage(); showAuthErrorFromUrl(); applyPending();
+    if (user && location.pathname.endsWith('/account.html') && new URLSearchParams(location.search).get('view') === 'orders') openCustomerOrders();
     if (new URLSearchParams(location.search).get('login') === '1' && !user) openAccount();
 
   });

@@ -215,6 +215,74 @@ function orderNo() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return 'F-' + [...randomBytes(8)].map((b) => alphabet[b % alphabet.length]).join('');
 }
+function bankTransferInstructions(orderNumber, totalCents) {
+  const accountNo = '66195917116';
+  const accountName = 'TRAN HUYNH MINH DANG';
+  const amount = Math.round(totalCents / 100);
+  const addInfo = `FLEX${String(orderNumber).replace(/[^A-Z0-9]/gi, '').toUpperCase()}`;
+  const qrUrl = `https://img.vietqr.io/image/970449-${accountNo}-compact2.svg?amount=${amount}&addInfo=${encodeURIComponent(addInfo)}&accountName=${encodeURIComponent(accountName)}`;
+  return { bankId: 'LPBank', accountNo, accountName, amount, addInfo, qrUrl };
+}
+const vnpayConfigured = (env) => Boolean(env.VNPAY_TMN_CODE && env.VNPAY_HASH_SECRET);
+function toHex(bytes) { return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join(''); }
+async function vnpayHmac(data, secret) {
+  const cryptoKey = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-512' }, false, ['sign']);
+  return toHex(await crypto.subtle.sign('HMAC', cryptoKey, enc.encode(data)));
+}
+async function vnpaySignature(params, secret) {
+  const data = [...params.entries()].filter(([key]) => key !== 'vnp_SecureHash' && key !== 'vnp_SecureHashType')
+    .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value).replace(/%20/g, '+')}`).join('&');
+  return vnpayHmac(data, secret);
+}
+function secureHashEqual(a, b) {
+  if (!/^[a-f0-9]{128}$/i.test(a) || !/^[a-f0-9]{128}$/i.test(b)) return false;
+  a = a.toLowerCase(); b = b.toLowerCase();
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return mismatch === 0;
+}
+function vnTime(date) {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(date);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}${value.month}${value.day}${value.hour}${value.minute}${value.second}`;
+}
+async function vnpayPaymentUrl({ env, request, orderNo, totalCents, txnRef }) {
+  const url = new URL(request.url), txnCreatedAt = Number(txnRef.slice(-13));
+  const created = Number.isSafeInteger(txnCreatedAt) && txnCreatedAt > 0 ? new Date(txnCreatedAt) : new Date();
+  const expires = new Date(created.getTime() + 15 * 60 * 1000);
+  const params = new URLSearchParams({
+    vnp_Version: '2.1.0', vnp_Command: 'pay', vnp_TmnCode: env.VNPAY_TMN_CODE,
+    vnp_Amount: String(Math.round(totalCents / 100) * 100), vnp_CurrCode: 'VND', vnp_TxnRef: txnRef,
+    vnp_OrderInfo: `Thanh toan don Flex ${orderNo.replace(/[^A-Z0-9]/gi, '')}`, vnp_OrderType: 'other',
+    vnp_Locale: 'vn', vnp_ReturnUrl: `${url.origin}/api/payments/vnpay/return`, vnp_IpAddr: request.headers.get('cf-connecting-ip') || '127.0.0.1',
+    vnp_CreateDate: vnTime(created), vnp_ExpireDate: vnTime(expires),
+  });
+  const hash = await vnpaySignature(params, env.VNPAY_HASH_SECRET);
+  params.sort(); params.set('vnp_SecureHash', hash);
+  const endpoint = env.VNPAY_ENV === 'production' ? 'https://pay.vnpay.vn/vpcpay.html' : 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
+  return `${endpoint}?${params.toString()}`;
+}
+async function queryVnpayAttempt({ env, request, attempt, orderNo }) {
+  const created = new Date(), requestId = toHex(randomBytes(16));
+  const fields = {
+    vnp_RequestId: requestId, vnp_Version: '2.1.0', vnp_Command: 'querydr', vnp_TmnCode: env.VNPAY_TMN_CODE,
+    vnp_TxnRef: attempt.txn_ref, vnp_TransactionDate: vnTime(new Date(Number(attempt.txn_ref.slice(-13)) > 0 ? Number(attempt.txn_ref.slice(-13)) : attempt.created_at * 1000)), vnp_CreateDate: vnTime(created),
+    vnp_IpAddr: '127.0.0.1', vnp_OrderInfo: `Truy van giao dich ${orderNo}`,
+  };
+  const requestData = [fields.vnp_RequestId, fields.vnp_Version, fields.vnp_Command, fields.vnp_TmnCode, fields.vnp_TxnRef,
+    fields.vnp_TransactionDate, fields.vnp_CreateDate, fields.vnp_IpAddr, fields.vnp_OrderInfo].join('|');
+  const endpoint = env.VNPAY_ENV === 'production' ? 'https://pay.vnpay.vn/merchant_webapi/api/transaction' : 'https://sandbox.vnpayment.vn/merchant_webapi/api/transaction';
+  const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...fields, vnp_SecureHash: await vnpayHmac(requestData, env.VNPAY_HASH_SECRET) }) });
+  if (!response.ok) throw new HttpError(502, 'VNPay chưa phản hồi được trạng thái giao dịch. Vui lòng thử lại sau.');
+  const result = await response.json();
+  const responseData = ['vnp_ResponseId', 'vnp_Command', 'vnp_ResponseCode', 'vnp_Message', 'vnp_TmnCode', 'vnp_TxnRef', 'vnp_Amount', 'vnp_BankCode', 'vnp_PayDate', 'vnp_TransactionNo', 'vnp_TransactionType', 'vnp_TransactionStatus', 'vnp_OrderInfo', 'vnp_PromotionCode', 'vnp_PromotionAmount']
+    .map((key) => String(result[key] == null ? '' : result[key])).join('|');
+  if (!secureHashEqual(String(result.vnp_SecureHash || ''), await vnpayHmac(responseData, env.VNPAY_HASH_SECRET)) || result.vnp_TmnCode !== env.VNPAY_TMN_CODE || result.vnp_TxnRef !== attempt.txn_ref) {
+    throw new HttpError(502, 'Không xác minh được phản hồi trạng thái từ VNPay. Vui lòng thử lại sau.');
+  }
+  return result;
+}
 const isUnique = (e) => /UNIQUE/i.test(String(e && e.message));
 const isUsernameConflict = (e) => /users\.username|idx_users_username/i.test(String(e && e.message));
 
@@ -356,13 +424,14 @@ async function contact({ env, request }) {
   return json({ ok: true, emailSent }, 201);
 }
 
-async function paymentMethods() {
-  return json({ methods: [{ id: 'cod', enabled: true }, { id: 'bank_qr', enabled: true }] });
+async function paymentMethods({ env }) {
+  return json({ methods: [{ id: 'cod', enabled: true }, { id: 'bank_qr', enabled: true }, { id: 'vnpay', enabled: vnpayConfigured(env) }] });
 }
 async function checkout({ env, request, user }) {
   const b = await body(request);
   const paymentMethod = b.paymentMethod || 'cod';
-  if (!['cod', 'bank_qr'].includes(paymentMethod)) throw bad('Phương thức thanh toán không hợp lệ.');
+  if (!['cod', 'bank_qr', 'vnpay'].includes(paymentMethod)) throw bad('Phương thức thanh toán không hợp lệ.');
+  if (paymentMethod === 'vnpay' && !vnpayConfigured(env)) throw new HttpError(503, 'Thanh toán VNPAY chưa được cấu hình.');
   if (!Array.isArray(b.items) || b.items.length < 1 || b.items.length > 20) throw bad('Giỏ hàng đang trống hoặc có quá nhiều mặt hàng.');
   const wanted = new Map();
   for (const it of b.items) {
@@ -395,10 +464,15 @@ async function checkout({ env, request, user }) {
     if (p.stock < quantityForProduct) throw new HttpError(409, `Sản phẩm ${p.name} hiện chỉ còn ${p.stock} chiếc. Vui lòng điều chỉnh số lượng.`);
   }
   const no = orderNo(), t = now();
+  if (paymentMethod === 'vnpay' && Math.round(total / 100) < 5000) throw new HttpError(400, 'Giá trị thanh toán qua VNPAY tối thiểu là 5.000 ₫.');
+  const txnCreatedAt = paymentMethod === 'vnpay' ? Date.now() : 0;
+  const txnRef = paymentMethod === 'vnpay' ? `${no.replace(/[^A-Z0-9]/gi, '')}${txnCreatedAt}` : '';
+  const paymentUrl = paymentMethod === 'vnpay' ? await vnpayPaymentUrl({ env, request, orderNo: no, totalCents: total, txnRef }) : '';
   const prof = await env.DB.prepare('SELECT phone, address, city, postal_code, country FROM users WHERE id = ?').bind(user.id).first();
   const shipTo = [prof.address, prof.city, prof.postal_code, prof.country].filter(Boolean).join(', ');
   const stmts = [env.DB.prepare('INSERT INTO orders (order_no, user_id, email, name, phone, ship_address, total_cents, payment_method, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(no, user.id, user.email, user.name, prof.phone, shipTo, total, paymentMethod, 'pending', t)];
+  if (paymentMethod === 'vnpay') stmts.push(env.DB.prepare("INSERT INTO payment_attempts (order_id, gateway, txn_ref, amount_vnd, status, created_at, updated_at) VALUES ((SELECT id FROM orders WHERE order_no = ?), 'vnpay', ?, ?, 'pending', ?, ?)").bind(no, txnRef, Math.round(total / 100), Math.floor(txnCreatedAt / 1000), t));
   for (const line of lines) {
     const p = line.product;
     stmts.push(env.DB.prepare('INSERT INTO order_items (order_id, product_id, name, name_vi, size, unit_price_cents, qty) VALUES ((SELECT id FROM orders WHERE order_no = ?), ?, ?, ?, ?, ?, ?)')
@@ -417,11 +491,56 @@ async function checkout({ env, request, user }) {
     throw err;
   }
   if (paymentMethod === 'bank_qr') {
-    const amount = Math.round(total / 100);
-    const addInfo = `Flex ${no}`;
-    return json({ orderNo: no, totalCents: total, paymentMethod, bankTransfer: { bankId: 'LPBank', accountNo: '66195917116', accountName: 'TRAN HUYNH MINH DANG', amount, addInfo, qrUrl: '/img/payment-qr.jpg' } }, 201);
+    return json({ orderNo: no, totalCents: total, paymentMethod, bankTransfer: bankTransferInstructions(no, total) }, 201);
   }
+  if (paymentMethod === 'vnpay') return json({ orderNo: no, totalCents: total, paymentMethod, paymentUrl }, 201);
   return json({ orderNo: no, totalCents: total, paymentMethod }, 201);
+}
+
+async function vnpayIpn({ env, url }) {
+  const params = new URLSearchParams(url.search), received = params.get('vnp_SecureHash') || '';
+  const expected = await vnpaySignature(params, env.VNPAY_HASH_SECRET || '');
+  const reply = (RspCode, Message) => json({ RspCode, Message });
+  if (!vnpayConfigured(env) || params.get('vnp_TmnCode') !== env.VNPAY_TMN_CODE || !secureHashEqual(received, expected)) return reply('97', 'Invalid Checksum');
+  const txnRef = params.get('vnp_TxnRef') || '', amount = Number(params.get('vnp_Amount'));
+  const attempt = await env.DB.prepare(`SELECT p.id, p.order_id, p.amount_vnd, p.status, o.status AS order_status
+    FROM payment_attempts p JOIN orders o ON o.id = p.order_id WHERE p.txn_ref = ? AND p.gateway = 'vnpay'`).bind(txnRef).first();
+  if (!attempt) return reply('01', 'Order not Found');
+  if (attempt.status !== 'pending') return reply('02', 'Order already confirmed');
+  if (amount !== attempt.amount_vnd * 100) return reply('04', 'Invalid Amount');
+  if (attempt.order_status === 'cancelled') return reply('02', 'Order already cancelled');
+  const success = params.get('vnp_ResponseCode') === '00' && params.get('vnp_TransactionStatus') === '00';
+  const transactionNo = params.get('vnp_TransactionNo') || '', bankCode = params.get('vnp_BankCode') || '';
+  await env.DB.batch([
+    env.DB.prepare('UPDATE payment_attempts SET status = ?, transaction_no = ?, bank_code = ?, updated_at = ? WHERE id = ? AND status = ?').bind(success ? 'paid' : 'failed', transactionNo, bankCode, now(), attempt.id, 'pending'),
+    ...(success ? [env.DB.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ? AND status != 'cancelled' AND EXISTS (SELECT 1 FROM payment_attempts WHERE id = ? AND status = 'paid')").bind(attempt.order_id, attempt.id)] : []),
+  ]);
+  return reply('00', 'Confirm Success');
+}
+async function vnpayReturn({ env, url }) {
+  const params = new URLSearchParams(url.search), received = params.get('vnp_SecureHash') || '';
+  const expected = await vnpaySignature(params, env.VNPAY_HASH_SECRET || '');
+  const valid = vnpayConfigured(env) && params.get('vnp_TmnCode') === env.VNPAY_TMN_CODE && secureHashEqual(received, expected);
+  const txnRef = valid ? params.get('vnp_TxnRef') || '' : '';
+  let attempt = txnRef ? await env.DB.prepare(`SELECT p.id, p.order_id, p.amount_vnd, p.status, o.order_no, o.status AS order_status
+    FROM payment_attempts p JOIN orders o ON o.id = p.order_id WHERE p.txn_ref = ? AND p.gateway = 'vnpay'`).bind(txnRef).first() : null;
+  const amountMatches = attempt && Number(params.get('vnp_Amount')) === attempt.amount_vnd * 100;
+  const paidAtGateway = params.get('vnp_ResponseCode') === '00' && params.get('vnp_TransactionStatus') === '00';
+  if (valid && amountMatches && paidAtGateway && attempt.status === 'pending' && attempt.order_status !== 'cancelled') {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE payment_attempts SET status = 'paid', transaction_no = ?, bank_code = ?, updated_at = ? WHERE id = ? AND status = 'pending'")
+        .bind(params.get('vnp_TransactionNo') || '', params.get('vnp_BankCode') || '', now(), attempt.id),
+      env.DB.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ? AND status != 'cancelled' AND EXISTS (SELECT 1 FROM payment_attempts WHERE id = ? AND status = 'paid')")
+        .bind(attempt.order_id, attempt.id),
+    ]);
+    attempt = await env.DB.prepare('SELECT p.status, o.order_no FROM payment_attempts p JOIN orders o ON o.id = p.order_id WHERE p.id = ?')
+      .bind(attempt.id).first();
+  }
+  const state = !valid ? 'invalid' : !attempt || (paidAtGateway && !amountMatches) ? 'invalid' : paidAtGateway ? (attempt.status === 'paid' ? 'success' : attempt.status === 'pending' ? 'checking' : 'failed') : 'failed';
+  const destination = new URL('/checkout.html', url.origin);
+  destination.searchParams.set('vnpay', state);
+  if (attempt) destination.searchParams.set('order', attempt.order_no);
+  return redirect(destination.toString());
 }
 
 async function customerOrders({ env, user }) {
@@ -433,8 +552,64 @@ async function customerOrders({ env, user }) {
   for (const order of results) {
     const { results: items } = await env.DB.prepare('SELECT name, name_vi, size, unit_price_cents, qty FROM order_items WHERE order_id = ? ORDER BY id').bind(order.id).all();
     order.items = items;
+    if (order.payment_method === 'bank_qr' && order.payment_status === 'pending' && order.status !== 'cancelled') {
+      order.bank_transfer = bankTransferInstructions(order.order_no, order.total_cents);
+    }
   }
   return json({ orders: results });
+}
+
+async function payExistingVnpayOrder({ env, request, user, params }) {
+  const id = int(params.id, 'Order', 1, 1e9);
+  const order = await env.DB.prepare('SELECT id, order_no, total_cents, status, payment_method, payment_status FROM orders WHERE id = ? AND user_id = ?').bind(id, user.id).first();
+  if (!order) throw new HttpError(404, 'Order not found');
+  if (order.payment_method !== 'vnpay') throw bad('Đơn hàng này không thanh toán qua VNPAY.');
+  if (order.payment_status === 'paid') return json({ status: 'paid' });
+  if (order.status !== 'pending') throw new HttpError(409, 'Đơn hàng không còn ở trạng thái chờ thanh toán.');
+  if (!vnpayConfigured(env)) throw new HttpError(503, 'Thanh toán VNPAY chưa được cấu hình.');
+
+  const { results: attempts } = await env.DB.prepare('SELECT id, txn_ref, amount_vnd, status, created_at FROM payment_attempts WHERE order_id = ? AND gateway = ? ORDER BY id DESC')
+    .bind(id, 'vnpay').all();
+  const paidAttempt = attempts.find((attempt) => attempt.status === 'paid');
+  if (paidAttempt) {
+    await env.DB.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ? AND status != 'cancelled'").bind(id).run();
+    return json({ status: 'paid' });
+  }
+  const pending = attempts.find((attempt) => attempt.status === 'pending');
+  if (pending) {
+    const result = await queryVnpayAttempt({ env, request, attempt: pending, orderNo: order.order_no });
+    if (result.vnp_ResponseCode === '00') {
+      const status = String(result.vnp_TransactionStatus || '');
+      if (status === '00') {
+        if (Number(result.vnp_Amount) !== pending.amount_vnd * 100) throw new HttpError(502, 'Số tiền VNPay trả về không khớp đơn hàng. Vui lòng liên hệ cửa hàng.');
+        await env.DB.batch([
+          env.DB.prepare("UPDATE payment_attempts SET status = 'paid', transaction_no = ?, bank_code = ?, updated_at = ? WHERE id = ? AND status = 'pending'")
+            .bind(String(result.vnp_TransactionNo || ''), String(result.vnp_BankCode || ''), now(), pending.id),
+          env.DB.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ? AND status != 'cancelled' AND EXISTS (SELECT 1 FROM payment_attempts WHERE id = ? AND status = 'paid')")
+            .bind(id, pending.id),
+        ]);
+        return json({ status: 'paid' });
+      }
+      if (status === '02' || status === '04') {
+        await env.DB.prepare("UPDATE payment_attempts SET status = 'failed', transaction_no = ?, bank_code = ?, updated_at = ? WHERE id = ? AND status = 'pending'")
+          .bind(String(result.vnp_TransactionNo || ''), String(result.vnp_BankCode || ''), now(), pending.id).run();
+      } else {
+        return json({ status: 'checking' });
+      }
+    } else if (result.vnp_ResponseCode === '91') {
+      await env.DB.prepare("UPDATE payment_attempts SET status = 'failed', updated_at = ? WHERE id = ? AND status = 'pending'").bind(now(), pending.id).run();
+    } else if (result.vnp_ResponseCode === '94') {
+      return json({ status: 'checking' });
+    } else {
+      throw new HttpError(502, 'VNPay chưa xác nhận được giao dịch cũ. Vui lòng thử lại sau.');
+    }
+  }
+
+  const txnCreatedAt = Date.now(), createdAt = Math.floor(txnCreatedAt / 1000), txnRef = `${order.order_no.replace(/[^A-Z0-9]/gi, '')}${txnCreatedAt}`;
+  const paymentUrl = await vnpayPaymentUrl({ env, request, orderNo: order.order_no, totalCents: order.total_cents, txnRef });
+  await env.DB.prepare("INSERT INTO payment_attempts (order_id, gateway, txn_ref, amount_vnd, status, created_at, updated_at) VALUES (?, 'vnpay', ?, ?, 'pending', ?, ?)")
+    .bind(id, txnRef, Math.round(order.total_cents / 100), createdAt, createdAt).run();
+  return json({ status: 'retry', paymentUrl });
 }
 
 async function customerProfile({ env, user }) {
@@ -523,6 +698,7 @@ async function cancelCustomerOrder({ env, user, params }) {
   const { results: items } = await env.DB.prepare('SELECT product_id, qty FROM order_items WHERE order_id = ? AND product_id IS NOT NULL').bind(id).all();
   const stmts = items.map((item) => env.DB.prepare(`UPDATE products SET stock = stock + ?, updated_at = ? WHERE id = ?
     AND EXISTS (SELECT 1 FROM orders WHERE id = ? AND status = 'pending')`).bind(item.qty, now(), item.product_id, id));
+  stmts.push(env.DB.prepare("UPDATE payment_attempts SET status = 'failed', updated_at = ? WHERE order_id = ? AND status = 'pending'").bind(now(), id));
   stmts.push(env.DB.prepare("UPDATE orders SET status = 'cancelled' WHERE id = ? AND user_id = ? AND status = 'pending'").bind(id, user.id));
   const changes = await env.DB.batch(stmts);
   if (!changes[changes.length - 1].meta.changes) throw new HttpError(409, 'This order has already been updated');
@@ -1099,8 +1275,11 @@ add('GET', '/api/img/:key', serveImage, 'public');
 add('GET', '/api/drops', listDropsPublic, 'public');
 add('POST', '/api/drops/:id/subscribe', subscribe, 'customer');
 add('POST', '/api/contact', contact, 'public');
+add('GET', '/api/payments/vnpay/ipn', vnpayIpn, 'public');
+add('GET', '/api/payments/vnpay/return', vnpayReturn, 'public');
 add('POST', '/api/orders', checkout, 'customer');
 add('GET', '/api/orders', customerOrders, 'customer');
+add('POST', '/api/orders/:id/pay-vnpay', payExistingVnpayOrder, 'customer');
 add('GET', '/api/payments/methods', paymentMethods, 'public');
 add('GET', '/api/account/profile', customerProfile, 'customer');
 add('PUT', '/api/account/profile', updateCustomerProfile, 'customer');
