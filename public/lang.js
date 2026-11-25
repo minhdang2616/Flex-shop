@@ -113,17 +113,21 @@
     try { localStorage.setItem('flex_language', lang); } catch (_) {}
   }
   document.addEventListener('DOMContentLoaded', function () {
-    apply('vi');
-    var observer = new MutationObserver(function (records) {
-      records.forEach(function (record) {
-        record.addedNodes.forEach(function (added) {
-          if (added.nodeType === Node.TEXT_NODE) {
-            var trim = added.nodeValue.trim();
-            if (vi[trim]) added.nodeValue = added.nodeValue.replace(trim, vi[trim]);
-          } else if (added.nodeType === Node.ELEMENT_NODE) translate(added, vi);
+    try {
+      apply('vi');
+      var observer = new MutationObserver(function (records) {
+        records.forEach(function (record) {
+          record.addedNodes.forEach(function (added) {
+            if (added.nodeType === Node.TEXT_NODE) {
+              var trim = added.nodeValue.trim();
+              if (vi[trim]) added.nodeValue = added.nodeValue.replace(trim, vi[trim]);
+            } else if (added.nodeType === Node.ELEMENT_NODE) translate(added, vi);
+          });
         });
       });
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
+      observer.observe(document.body, { childList: true, subtree: true });
+    } finally {
+      document.documentElement.classList.remove('i18n-pending');
+    }
   });
 })();
