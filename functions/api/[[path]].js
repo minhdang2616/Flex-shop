@@ -8,14 +8,79 @@ const STAFF_SESSION = 12 * 3600;
 const MAX_FAILS = 5, LOCK_SECONDS = 900;
 const DEPTS = ['Men', 'Women', 'Kids', 'Unisex'];
 const CATS = ['Tops', 'Bottoms', 'Outerwear'];
-const COLORS = ['red', 'blue', 'ink', 'volt'];
-const TAGS = ['', 'New', 'Bestseller'];
+const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '28', '30', '32', '34', '36', '38', '2Y', '4Y', '6Y', '8Y', '10Y', '12Y', '14Y'];
+const TAGS = ['', 'New', 'Bestseller', 'Sale'];
 const ORDER_STATUS = ['pending', 'shipped', 'delivered', 'cancelled'];
+const IMG_SRC = "COALESCE('/api/img/' || file_key, url)";   // where a photo is loaded from
 
 const enc = new TextEncoder();
 const now = () => Math.floor(Date.now() / 1000);
 
-class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
+const ERROR_MESSAGES_VI = {
+  'Invalid username or password': 'Tên đăng nhập hoặc mật khẩu không đúng.',
+  'Too many failed attempts. Try again in a few minutes.': 'Bạn đã đăng nhập sai quá nhiều lần. Vui lòng thử lại sau vài phút.',
+  'This account is disabled': 'Tài khoản này đã bị khóa.',
+  'This account does not have admin access': 'Tài khoản này không có quyền quản trị.',
+  'Admin and staff accounts must sign in at the admin portal': 'Tài khoản nhân viên và quản trị viên cần đăng nhập tại trang quản trị.',
+  'Request too large': 'Yêu cầu quá lớn. Vui lòng thử lại.', 'Invalid JSON body': 'Dữ liệu gửi lên không hợp lệ.',
+  'Setup is disabled': 'Chức năng thiết lập đã bị tắt.', 'Invalid setup token': 'Mã thiết lập không hợp lệ.',
+  'An admin already exists': 'Tài khoản quản trị đã được tạo.', 'That username is already taken': 'Tên đăng nhập này đã được sử dụng.',
+  'This account conflicts with an existing email or Google account. Check the details and try again.': 'Email hoặc tài khoản Google đã được sử dụng. Vui lòng kiểm tra lại thông tin.',
+  'This account conflicts with an existing email or Google account.': 'Email hoặc tài khoản Google đã được sử dụng.',
+  'Product not found': 'Không tìm thấy sản phẩm.', 'Drop not found': 'Không tìm thấy sản phẩm sắp ra mắt.',
+  'Too many messages. Please try again later.': 'Bạn đã gửi quá nhiều tin nhắn. Vui lòng thử lại sau.',
+  'Your message was saved for the shop, but email delivery failed. Please try again later.': 'Tin nhắn đã được lưu nhưng chưa gửi được email. Vui lòng thử lại sau.',
+  'Your bag is empty': 'Giỏ hàng đang trống.',
+  'Email sending is not configured. Ask the site owner to connect Gmail or Resend.': 'Chức năng gửi email chưa được cấu hình. Vui lòng liên hệ cửa hàng.',
+  'Account not found': 'Không tìm thấy tài khoản.',
+  'This account must be changed using its current password': 'Tài khoản này cần đổi mật khẩu bằng mật khẩu hiện tại.',
+  'Please wait before requesting another code': 'Vui lòng đợi trước khi yêu cầu mã mới.',
+  'Too many codes requested. Try again in an hour': 'Bạn đã yêu cầu quá nhiều mã. Vui lòng thử lại sau một giờ.',
+  'Could not send the email. Please try again later': 'Không gửi được email. Vui lòng thử lại sau.',
+  'Enter exactly one valid password verification method': 'Vui lòng chọn đúng một cách xác minh mật khẩu.',
+  'Current password is incorrect': 'Mật khẩu hiện tại không đúng.',
+  'Choose a password different from your current one': 'Vui lòng chọn mật khẩu mới khác mật khẩu hiện tại.',
+  'Enter the verification code sent to your email': 'Vui lòng nhập mã xác minh đã gửi đến email.',
+  'Verification code is invalid or expired': 'Mã xác minh không hợp lệ hoặc đã hết hạn.',
+  'Verification code is incorrect': 'Mã xác minh không đúng.', 'Please sign in again': 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+  'Order not found': 'Không tìm thấy đơn hàng.', 'Only pending orders can be cancelled': 'Chỉ có thể hủy đơn hàng đang chờ xử lý.',
+  'This order has already been updated': 'Đơn hàng đã được cập nhật trước đó.',
+  'Price must be a valid amount': 'Giá sản phẩm không hợp lệ.', 'That SKU already exists': 'Mã SKU này đã được sử dụng.',
+  'Image URL must start with https://': 'Đường dẫn ảnh phải bắt đầu bằng https://.',
+  'A product can have at most 12 images': 'Mỗi sản phẩm có thể có tối đa 12 ảnh.', 'Image not found': 'Không tìm thấy ảnh.',
+  'Cancelled orders cannot be changed': 'Không thể cập nhật đơn hàng đã hủy.', 'User not found': 'Không tìm thấy người dùng.',
+  'You cannot change your own role or disable yourself': 'Bạn không thể tự đổi quyền hoặc khóa tài khoản của mình.',
+  'You cannot delete your own account': 'Bạn không thể tự xóa tài khoản của mình.', 'Enter a valid phone number': 'Vui lòng nhập số điện thoại hợp lệ.',
+  'Photo storage is not set up yet (the KV namespace binding named IMAGES is missing).': 'Kho lưu ảnh chưa được cấu hình. Vui lòng liên hệ quản trị viên.',
+  'That file is too large (5 MB maximum)': 'Ảnh vượt quá dung lượng tối đa 5 MB.', 'Upload the photo as a form file': 'Vui lòng tải ảnh lên dưới dạng tệp.',
+  'Choose an image file to upload': 'Vui lòng chọn ảnh cần tải lên.', 'That file is empty': 'Tệp ảnh đang trống.',
+  'Only PNG, JPG or WebP photos are allowed': 'Chỉ chấp nhận ảnh PNG, JPG hoặc WebP.',
+  'Your Google sign-in expired. Please start again.': 'Phiên đăng nhập Google đã hết hạn. Vui lòng thử lại.',
+  'Cross-origin request blocked': 'Yêu cầu không hợp lệ. Vui lòng tải lại trang.',
+  'Method not allowed': 'Thao tác này không được hỗ trợ.', 'Not found': 'Không tìm thấy nội dung yêu cầu.',
+  'Please sign in': 'Vui lòng đăng nhập để tiếp tục.', 'You do not have permission to do that': 'Bạn không có quyền thực hiện thao tác này.',
+};
+const ERROR_FIELDS_VI = { Product: 'Mã sản phẩm', Quantity: 'Số lượng', Size: 'Kích cỡ', Name: 'Họ tên', Email: 'Email', Phone: 'Số điện thoại', Address: 'Địa chỉ', City: 'Tỉnh/thành phố', Password: 'Mật khẩu', Username: 'Tên đăng nhập', SKU: 'Mã SKU', Status: 'Trạng thái', Order: 'Mã đơn hàng', Image: 'Ảnh', Drop: 'Sản phẩm sắp ra mắt', User: 'Người dùng', Department: 'Đối tượng', Category: 'Danh mục', Role: 'Vai trò', Price: 'Giá', Stock: 'Tồn kho' };
+function vietnameseError(message) {
+  const text = String(message || '');
+  if (ERROR_MESSAGES_VI[text]) return ERROR_MESSAGES_VI[text];
+  let match = text.match(/^(.+) is required$/);
+  if (match) return `Vui lòng nhập ${ERROR_FIELDS_VI[match[1]] || match[1]}.`;
+  match = text.match(/^(.+) must be (\d+)-(\d+) characters$/);
+  if (match) return `${ERROR_FIELDS_VI[match[1]] || match[1]} phải có từ ${match[2]} đến ${match[3]} ký tự.`;
+  match = text.match(/^(.+) must be a whole number between (\d+) and (\d+)$/);
+  if (match) return `${ERROR_FIELDS_VI[match[1]] || match[1]} phải là số nguyên từ ${match[2]} đến ${match[3]}.`;
+  match = text.match(/^(.+) must be one of: (.+)$/);
+  if (match) return `${ERROR_FIELDS_VI[match[1]] || match[1]} chỉ được nhận một trong các giá trị: ${match[2]}.`;
+  match = text.match(/^Username can only contain/);
+  if (match) return 'Tên đăng nhập chỉ được chứa chữ cái, chữ số, dấu gạch dưới và dấu chấm.';
+  if (text === 'Enter a valid email address') return 'Vui lòng nhập địa chỉ email hợp lệ.';
+  if (text === 'Password must be 8-128 characters') return 'Mật khẩu phải có từ 8 đến 128 ký tự.';
+  if (text === 'A product can have at most 12 photos') return 'Mỗi sản phẩm có thể có tối đa 12 ảnh.';
+  if (text === 'That file is empty') return 'Tệp ảnh đang trống.';
+  return /[\u00C0-\u024F\u1E00-\u1EFF]/.test(text) ? text : 'Đã xảy ra lỗi. Vui lòng thử lại sau.';
+}
+class HttpError extends Error { constructor(status, message) { super(vietnameseError(message)); this.status = status; } }
 const bad = (m) => new HttpError(400, m);
 
 // ---------- crypto ----------
@@ -47,19 +112,43 @@ async function sha256hex(text) {
   const d = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(text)));
   return [...d].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
+async function sendShopEmail(env, { to, subject, text, replyTo }) {
+  const gmailClientId = env.GMAIL_CLIENT_ID || env.GOOGLE_CLIENT_ID;
+  const gmailClientSecret = env.GMAIL_CLIENT_SECRET || env.GOOGLE_CLIENT_SECRET;
+  if (env.GMAIL_REFRESH_TOKEN && gmailClientId && gmailClientSecret) {
+    const tokenResponse = await fetch(GOOGLE_TOKEN, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: gmailClientId, client_secret: gmailClientSecret, refresh_token: env.GMAIL_REFRESH_TOKEN, grant_type: 'refresh_token' }) });
+    if (!tokenResponse.ok) return false;
+    const { access_token: accessToken } = await tokenResponse.json();
+    const headers = [`From: Flex Shop <flexshopcompany@gmail.com>`, `To: ${to}`, `Subject: ${subject}`, 'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: 8bit'];
+    if (replyTo) headers.push(`Reply-To: ${replyTo}`);
+    const raw = b64(enc.encode(`${headers.join('\r\n')}\r\n\r\n${text}`)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const sent = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ raw }) });
+    return sent.ok;
+  }
+  if (!env.RESEND_API_KEY || !env.RESET_EMAIL_FROM) return false;
+  const sent = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: env.RESET_EMAIL_FROM, to: [to], subject, text, ...(replyTo ? { reply_to: replyTo } : {}) }) });
+  return sent.ok;
+}
 const DUMMY_HASH = `pbkdf2$${PBKDF2_ITER}$${b64(new Uint8Array(16))}$${b64(new Uint8Array(32))}`;   // equalises timing for unknown emails
 
 // ---------- validation ----------
 function str(v, name, min, max) {
-  if (typeof v !== 'string') throw bad(`${name} is required`);
+  if (typeof v !== 'string') throw bad(`Vui lòng nhập ${name}.`);
   const s = v.trim();
-  if (s.length < min || s.length > max) throw bad(`${name} must be ${min}-${max} characters`);
+  if (s.length < min || s.length > max) throw bad(`${name} phải có từ ${min} đến ${max} ký tự.`);
   return s;
 }
 function int(v, name, min, max) {
   const n = Number(v);
-  if (!Number.isInteger(n) || n < min || n > max) throw bad(`${name} must be a whole number between ${min} and ${max}`);
+  if (!Number.isInteger(n) || n < min || n > max) throw bad(`${name} phải là số nguyên từ ${min} đến ${max}.`);
   return n;
+}
+function username(v) {
+  const s = str(v, 'Username', 3, 30).toLowerCase();
+  if (!/^[a-z0-9_.]+$/.test(s)) throw bad('Username can only contain letters, numbers, underscores and periods');
+  return s;
 }
 function email(v) {
   const s = str(v, 'Email', 3, 254).toLowerCase();
@@ -69,10 +158,6 @@ function email(v) {
 function password(v) {
   if (typeof v !== 'string' || v.length < 8 || v.length > 128) throw bad('Password must be 8-128 characters');
   return v;
-}
-function adminPassword(v) {
-  if (typeof v !== 'string' || v.length < 12) throw bad('Admin passwords must be at least 12 characters');
-  return password(v);
 }
 function oneOf(v, list, name) {
   if (!list.includes(v)) throw bad(`${name} must be one of: ${list.join(', ') || '(empty)'}`);
@@ -96,18 +181,22 @@ function cookie(request, name) {
   const m = (request.headers.get('cookie') || '').split(/;\s*/).find((c) => c.startsWith(name + '='));
   return m ? m.slice(name.length + 1) : null;
 }
-const sessionCookie = (token, maxAge) => `flex_session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${maxAge}`;
+const sessionCookie = (token, maxAge, scope = 'customer') => `${scope === 'admin' ? 'flex_admin_session' : 'flex_session'}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${maxAge}`;
 
-async function currentUser(env, request) {
-  const token = cookie(request, 'flex_session');
+async function currentUser(env, request, scope = 'customer') {
+  const token = cookie(request, scope === 'admin' ? 'flex_admin_session' : 'flex_session');
   if (!token) return null;
   const row = await env.DB.prepare(
-    `SELECT u.id, u.email, u.name, u.role, u.status FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.id, u.username, u.email, u.name, u.role, u.status FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.expires_at > ?`
   ).bind(await sha256hex(token), now()).first();
-  return row && row.status === 'active' ? row : null;
+  if (!row || row.status !== 'active') return null;
+  // Never interpret a legacy or admin session as a storefront customer session.
+  if (scope === 'customer' && row.role !== 'customer') return null;
+  if (scope === 'admin' && row.role === 'customer') return null;
+  return row;
 }
-async function startSession(env, user) {
+async function startSession(env, user, scope = user.role === 'customer' ? 'customer' : 'admin') {
   const token = b64url(randomBytes(32));
   const ttl = user.role === 'customer' ? CUSTOMER_SESSION : STAFF_SESSION;
   await env.DB.batch([
@@ -115,9 +204,9 @@ async function startSession(env, user) {
     env.DB.prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
       .bind(await sha256hex(token), user.id, now(), now() + ttl),
   ]);
-  return sessionCookie(token, ttl);
+  return sessionCookie(token, ttl, scope);
 }
-const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role });
+const publicUser = (u) => ({ id: u.id, name: u.name, username: u.username, email: u.email, role: u.role });
 const audit = (env, actor, action, detail = '') =>
   env.DB.prepare('INSERT INTO audit_log (user_id, actor, action, detail, created_at) VALUES (?, ?, ?, ?, ?)')
     .bind(actor.id ?? null, actor.email, action, detail, now()).run();
@@ -127,6 +216,7 @@ function orderNo() {
   return 'F-' + [...randomBytes(8)].map((b) => alphabet[b % alphabet.length]).join('');
 }
 const isUnique = (e) => /UNIQUE/i.test(String(e && e.message));
+const isUsernameConflict = (e) => /users\.username|idx_users_username/i.test(String(e && e.message));
 
 // ---------- public handlers ----------
 async function setup({ env, request }) {
@@ -137,28 +227,30 @@ async function setup({ env, request }) {
   if (!safeEqual(given, want)) throw new HttpError(403, 'Invalid setup token');
   const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").first();
   if (n > 0) throw new HttpError(409, 'An admin already exists');
-  const r = await env.DB.prepare('INSERT INTO users (email, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)')
-    .bind(email(b.email), str(b.name, 'Name', 1, 100), await hashPassword(adminPassword(b.password)), 'admin', now()).run();
-  await audit(env, { id: r.meta.last_row_id, email: b.email }, 'setup.admin_created');
+  const r = await env.DB.prepare('INSERT INTO users (username, email, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(username(b.username), email(b.email), str(b.name, 'Name', 1, 100), await hashPassword(password(b.password)), 'admin', now()).run();
+  await audit(env, { id: r.meta.last_row_id, email: b.username }, 'setup.admin_created');
   return json({ ok: true });
 }
 
 async function register({ env, request }) {
   const b = await body(request);
-  const e = email(b.email), name = str(b.name, 'Name', 1, 100), hash = await hashPassword(password(b.password));
+  const un = username(b.username), e = email(b.email), name = str(b.name, 'Name', 1, 100), prof = profileFields(b);
+  const hash = await hashPassword(password(b.password));
   try {
-    const r = await env.DB.prepare('INSERT INTO users (email, name, password_hash, created_at, last_login_at) VALUES (?, ?, ?, ?, ?)')
-      .bind(e, name, hash, now(), now()).run();
-    const user = { id: r.meta.last_row_id, email: e, name, role: 'customer' };
+    const r = await env.DB.prepare('INSERT INTO users (username, email, name, password_hash, phone, address, city, postal_code, country, created_at, last_login_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(un, e, name, hash, prof.phone, prof.address, prof.city, prof.postal_code, prof.country, now(), now()).run();
+    const user = { id: r.meta.last_row_id, username: un, email: e, name, role: 'customer' };
     return json({ user: publicUser(user) }, 201, { 'Set-Cookie': await startSession(env, user) });
   } catch (err) {
-    if (isUnique(err)) throw new HttpError(409, 'An account with this email already exists');
+    if (isUsernameConflict(err)) throw new HttpError(409, 'That username is already taken');
+    if (isUnique(err)) throw new HttpError(409, 'This account conflicts with an existing email or Google account. Check the details and try again.');
     throw err;
   }
 }
 
 // Checks a password against one user row, with lockout, then starts a session.
-async function authenticate(env, u, pw, failMessage) {
+async function authenticate(env, u, pw, failMessage, scope = 'customer') {
   if (!u) { await verifyPassword(pw, DUMMY_HASH); throw new HttpError(401, failMessage); }
   if (u.locked_until > now()) throw new HttpError(429, 'Too many failed attempts. Try again in a few minutes.');
   if (!(await verifyPassword(pw, u.password_hash))) {
@@ -168,41 +260,58 @@ async function authenticate(env, u, pw, failMessage) {
     throw new HttpError(401, failMessage);
   }
   if (u.status !== 'active') throw new HttpError(403, 'This account is disabled');
+  if (scope === 'admin' && u.role === 'customer') throw new HttpError(403, 'This account does not have admin access');
+  if (scope === 'customer' && u.role !== 'customer') throw new HttpError(403, 'Admin and staff accounts must sign in at the admin portal');
   await env.DB.prepare('UPDATE users SET failed_attempts = 0, locked_until = 0, last_login_at = ? WHERE id = ?').bind(now(), u.id).run();
-  return json({ user: publicUser(u) }, 200, { 'Set-Cookie': await startSession(env, u) });
+  return json({ user: publicUser(u) }, 200, { 'Set-Cookie': await startSession(env, u, scope) });
 }
 
 async function login({ env, request }) {
   const b = await body(request);
-  const u = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(email(b.email)).first();
-  return authenticate(env, u, typeof b.password === 'string' ? b.password.slice(0, 128) : '', 'Invalid email or password');
-}
-
-// Single-admin sign-in: only a password. It always targets the first (oldest) active admin account.
-async function adminLogin({ env, request }) {
-  const b = await body(request);
-  const u = await env.DB.prepare("SELECT * FROM users WHERE role = 'admin' AND status = 'active' ORDER BY id LIMIT 1").first();
-  return authenticate(env, u, typeof b.password === 'string' ? b.password.slice(0, 128) : '', 'Incorrect password');
+  const u = await env.DB.prepare('SELECT * FROM users WHERE username = ?').bind(username(b.username)).first();
+  const scope = b.scope === 'admin' || (!b.scope && u && u.role !== 'customer') ? 'admin' : 'customer';
+  return authenticate(env, u, typeof b.password === 'string' ? b.password.slice(0, 128) : '', 'Invalid username or password', scope);
 }
 
 async function logout({ env, request }) {
-  const token = cookie(request, 'flex_session');
+  const scope = new URL(request.url).searchParams.get('scope') === 'admin' ? 'admin' : 'customer';
+  const name = scope === 'admin' ? 'flex_admin_session' : 'flex_session';
+  const token = cookie(request, name);
   if (token) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256hex(token)).run();
-  return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) });
+  return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0, scope) });
 }
 
 const me = async ({ user }) => json({ user: user ? publicUser(user) : null });
 
 async function listProducts({ env, url }) {
-  let sql = `SELECT p.id, p.name, p.department, p.category, p.price_cents, p.stock, p.tag, p.color,
-    (SELECT url FROM product_images WHERE product_id = p.id ORDER BY position, id LIMIT 1) AS image_url
+  let sql = `SELECT p.id, p.name, p.name_vi, p.description, p.description_vi, p.department, p.category, p.price_cents, p.sale_price_cents, p.stock, p.tag,
+    (SELECT GROUP_CONCAT(ps.size, ',') FROM product_sizes ps WHERE ps.product_id = p.id ORDER BY ps.position) AS sizes,
+    (SELECT ${IMG_SRC} FROM product_images WHERE product_id = p.id ORDER BY position, id LIMIT 1) AS image_url
     FROM products p WHERE p.status = 'active'`;
   const binds = [];
   const dep = url.searchParams.get('department'), cat = url.searchParams.get('category');
+  const tag = url.searchParams.get('tag');
   if (DEPTS.includes(dep)) { sql += ' AND p.department = ?'; binds.push(dep); }
   if (CATS.includes(cat)) { sql += ' AND p.category = ?'; binds.push(cat); }
+  if (url.searchParams.get('stock') === '1') sql += ' AND p.stock > 0';
+  const price = url.searchParams.get('price');
+  if (price === 'under300') sql += ' AND COALESCE(p.sale_price_cents, p.price_cents) < 30000000';
+  if (price === '300to700') sql += ' AND COALESCE(p.sale_price_cents, p.price_cents) >= 30000000 AND COALESCE(p.sale_price_cents, p.price_cents) <= 70000000';
+  if (price === 'over700') sql += ' AND COALESCE(p.sale_price_cents, p.price_cents) > 70000000';
+  if (url.searchParams.get('sale') === '1') sql += ' AND p.sale_price_cents IS NOT NULL AND p.sale_price_cents < p.price_cents';
+  if (TAGS.includes(tag) && tag) { sql += ' AND p.tag = ?'; binds.push(tag); }
   if (url.searchParams.get('featured') === '1') sql += ' AND p.featured = 1';
-  const { results } = await env.DB.prepare(sql + ' ORDER BY p.id').bind(...binds).all();
+  const q = (url.searchParams.get('q') || '').trim().slice(0, 50);
+  if (q) {                                     // word-prefix search ("men" matches "Men's Tee" but not "Women's Tee"); bound params, wildcards in input escaped
+    const safe = q.replace(/[\\%_]/g, '\\$&');
+    sql += " AND (p.name LIKE ? ESCAPE '\\' OR p.name LIKE ? ESCAPE '\\' OR p.name_vi LIKE ? ESCAPE '\\' OR p.name_vi LIKE ? ESCAPE '\\' OR p.category LIKE ? ESCAPE '\\' OR p.department LIKE ? ESCAPE '\\')";
+    binds.push(safe + '%', '% ' + safe + '%', safe + '%', '% ' + safe + '%', safe + '%', safe + '%');
+  }
+  const sorts = { featured: 'p.featured DESC, p.id DESC', newest: "CASE WHEN p.tag = 'New' THEN 0 ELSE 1 END, p.id DESC", tag_new: "CASE WHEN p.tag = 'New' THEN 0 ELSE 1 END, p.id DESC", tag_bestseller: "CASE WHEN p.tag = 'Bestseller' THEN 0 ELSE 1 END, p.id DESC", sale_first: "CASE WHEN p.sale_price_cents IS NOT NULL AND p.sale_price_cents < p.price_cents THEN 0 ELSE 1 END, p.id DESC", price_asc: 'COALESCE(p.sale_price_cents, p.price_cents) ASC, p.id DESC', price_desc: 'COALESCE(p.sale_price_cents, p.price_cents) DESC, p.id DESC', name: 'p.name COLLATE NOCASE ASC' };
+  const orderBy = sorts[url.searchParams.get('sort')] || (url.searchParams.get('featured') === '1' ? sorts.featured : 'p.id DESC');
+  // Return the complete matching catalog. The former fixed 500-row cap silently
+  // hid discounted products once the matching set grew beyond that number.
+  const { results } = await env.DB.prepare(sql + ' ORDER BY ' + orderBy).bind(...binds).all();
   return json({ products: results });
 }
 
@@ -210,15 +319,15 @@ async function listProducts({ env, url }) {
 async function productDetail({ env, params }) {
   const id = Number(params.id);
   const product = await env.DB.prepare(
-    "SELECT id, name, department, category, price_cents, stock, tag, color FROM products WHERE id = ? AND status = 'active'"
+    "SELECT id, name, name_vi, description, description_vi, department, category, price_cents, sale_price_cents, stock, tag, (SELECT GROUP_CONCAT(ps.size, ',') FROM product_sizes ps WHERE ps.product_id = products.id ORDER BY ps.position) AS sizes FROM products WHERE id = ? AND status = 'active'"
   ).bind(id).first();
   if (!product) throw new HttpError(404, 'Product not found');
-  const { results } = await env.DB.prepare('SELECT id, url, alt_text, position FROM product_images WHERE product_id = ? ORDER BY position, id').bind(id).all();
+  const { results } = await env.DB.prepare(`SELECT id, ${IMG_SRC} AS src, alt_text, position FROM product_images WHERE product_id = ? ORDER BY position, id`).bind(id).all();
   return json({ product, images: results });
 }
 
 async function listDropsPublic({ env }) {
-  const { results } = await env.DB.prepare('SELECT id, name, description, release_date FROM drops ORDER BY id').all();
+  const { results } = await env.DB.prepare('SELECT id, name, name_vi, description, description_vi, release_date, image_url FROM drops ORDER BY id').all();
   return json({ drops: results });
 }
 
@@ -236,44 +345,183 @@ async function contact({ env, request }) {
   const { n } = await env.DB.prepare('SELECT COUNT(*) AS n FROM messages WHERE email = ? AND created_at > ?').bind(e, now() - 3600).first();
   if (n >= 5) throw new HttpError(429, 'Too many messages. Please try again later.');
   await env.DB.prepare('INSERT INTO messages (name, email, body, created_at) VALUES (?, ?, ?, ?)').bind(name, e, text, now()).run();
-  return json({ ok: true }, 201);
+  let emailSent = false;
+  try { emailSent = await sendShopEmail(env, { to: 'flexshopcompany@gmail.com', subject: 'Flex Shop feedback', text: `From: ${name} <${e}>\n\n${text}`, replyTo: e }); } catch (_) {}
+  if ((env.GMAIL_REFRESH_TOKEN || (env.RESEND_API_KEY && env.RESET_EMAIL_FROM)) && !emailSent) throw new HttpError(502, 'Your message was saved for the shop, but email delivery failed. Please try again later.');
+  return json({ ok: true, emailSent }, 201);
 }
 
+async function paymentMethods() {
+  return json({ methods: [{ id: 'cod', enabled: true }, { id: 'bank_qr', enabled: true }] });
+}
 async function checkout({ env, request, user }) {
   const b = await body(request);
-  if (!Array.isArray(b.items) || b.items.length < 1 || b.items.length > 20) throw bad('Your bag is empty');
+  const paymentMethod = b.paymentMethod || 'cod';
+  if (!['cod', 'bank_qr'].includes(paymentMethod)) throw bad('Phương thức thanh toán không hợp lệ.');
+  if (!Array.isArray(b.items) || b.items.length < 1 || b.items.length > 20) throw bad('Giỏ hàng đang trống hoặc có quá nhiều mặt hàng.');
   const wanted = new Map();
   for (const it of b.items) {
-    const id = int(it && it.productId, 'Product', 1, 1e9), qty = int(it && it.qty, 'Quantity', 1, 20);
-    wanted.set(id, (wanted.get(id) || 0) + qty);
+    const id = int(it && it.productId, 'Mã sản phẩm', 1, 1e9), qty = int(it && it.qty, 'Số lượng', 1, 20);
+    const size = str(it && it.size || '', 'Kích cỡ', 0, 8);
+    const key = id + ':' + size;
+    wanted.set(key, (wanted.get(key) || 0) + qty);
   }
-  const ids = [...wanted.keys()];
+  const ids = [...new Set([...wanted.keys()].map((key) => Number(key.split(':')[0])))];
   const { results } = await env.DB.prepare(
-    `SELECT id, name, price_cents, stock FROM products WHERE status = 'active' AND id IN (${ids.map(() => '?').join(',')})`
+    `SELECT id, name, name_vi, price_cents, sale_price_cents, stock, (SELECT GROUP_CONCAT(ps.size, ',') FROM product_sizes ps WHERE ps.product_id = products.id) AS sizes FROM products WHERE status = 'active' AND id IN (${ids.map(() => '?').join(',')})`
   ).bind(...ids).all();
-  if (results.length !== ids.length) throw new HttpError(409, 'Some items in your bag are no longer available');
+  if (results.length !== ids.length) throw new HttpError(409, 'Một số sản phẩm trong giỏ không còn được bán. Vui lòng tải lại giỏ hàng.');
   let total = 0;
+  const lines = [];
   for (const p of results) {
-    const qty = wanted.get(p.id);
-    if (p.stock < qty) throw new HttpError(409, `Only ${p.stock} left of ${p.name}`);
-    total += p.price_cents * qty;                 // price always comes from the database
+    const availableSizes = (p.sizes || '').split(',').filter(Boolean);
+    let quantityForProduct = 0;
+    for (const [key, qty] of wanted) {
+      if (Number(key.split(':')[0]) !== p.id) continue;
+      const size = key.slice(key.indexOf(':') + 1);
+      if (availableSizes.length && !size) throw new HttpError(400, `Vui lòng chọn kích cỡ cho ${p.name}.`);
+      if (size && availableSizes.length && !availableSizes.includes(size)) throw new HttpError(409, `Kích cỡ đã chọn cho ${p.name} không còn hợp lệ. Vui lòng chọn lại.`);
+      if (!availableSizes.length && size) throw new HttpError(409, `Thông tin sản phẩm ${p.name} đã thay đổi. Vui lòng cập nhật giỏ hàng.`);
+      quantityForProduct += qty;
+      const unit = p.sale_price_cents != null && p.sale_price_cents < p.price_cents ? p.sale_price_cents : p.price_cents;
+      total += unit * qty;
+      lines.push({ product: p, qty, size, unit });
+    }
+    if (p.stock < quantityForProduct) throw new HttpError(409, `Sản phẩm ${p.name} hiện chỉ còn ${p.stock} chiếc. Vui lòng điều chỉnh số lượng.`);
   }
   const no = orderNo(), t = now();
-  const stmts = [env.DB.prepare('INSERT INTO orders (order_no, user_id, email, name, total_cents, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(no, user.id, user.email, user.name, total, t)];
-  for (const p of results) {
-    const qty = wanted.get(p.id);
-    stmts.push(env.DB.prepare('INSERT INTO order_items (order_id, product_id, name, unit_price_cents, qty) VALUES ((SELECT id FROM orders WHERE order_no = ?), ?, ?, ?, ?)')
-      .bind(no, p.id, p.name, p.price_cents, qty));
+  const prof = await env.DB.prepare('SELECT phone, address, city, postal_code, country FROM users WHERE id = ?').bind(user.id).first();
+  const shipTo = [prof.address, prof.city, prof.postal_code, prof.country].filter(Boolean).join(', ');
+  const stmts = [env.DB.prepare('INSERT INTO orders (order_no, user_id, email, name, phone, ship_address, total_cents, payment_method, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(no, user.id, user.email, user.name, prof.phone, shipTo, total, paymentMethod, 'pending', t)];
+  for (const line of lines) {
+    const p = line.product;
+    stmts.push(env.DB.prepare('INSERT INTO order_items (order_id, product_id, name, name_vi, size, unit_price_cents, qty) VALUES ((SELECT id FROM orders WHERE order_no = ?), ?, ?, ?, ?, ?, ?)')
+      .bind(no, p.id, p.name, p.name_vi || p.name, line.size, line.unit, line.qty));
     // stock has CHECK (stock >= 0): if someone bought the last unit meanwhile, this fails and the whole batch rolls back
-    stmts.push(env.DB.prepare('UPDATE products SET stock = stock - ?, updated_at = ? WHERE id = ?').bind(qty, t, p.id));
+    stmts.push(env.DB.prepare('UPDATE products SET stock = stock - ?, updated_at = ? WHERE id = ?').bind(line.qty, t, p.id));
   }
   try { await env.DB.batch(stmts); }
   catch (err) {
-    if (/CHECK|constraint/i.test(String(err.message))) throw new HttpError(409, 'Some items just sold out. Please review your bag.');
+    const message = String(err && err.message || '');
+    if (/stock\s*>=\s*0|products\.stock/i.test(message)) throw new HttpError(409, 'Số lượng sản phẩm vừa thay đổi. Vui lòng kiểm tra tồn kho và thử lại.');
+    if (/CHECK|constraint|UNIQUE|FOREIGN KEY/i.test(message)) {
+      console.error('Checkout constraint failure:', message);
+      throw new HttpError(409, 'Đơn hàng chưa thể được tạo do dữ liệu không hợp lệ. Vui lòng tải lại giỏ hàng và thử lại.');
+    }
     throw err;
   }
-  return json({ orderNo: no, totalCents: total }, 201);
+  if (paymentMethod === 'bank_qr') {
+    const amount = Math.round(total / 100);
+    const addInfo = `Flex ${no}`;
+    return json({ orderNo: no, totalCents: total, paymentMethod, bankTransfer: { bankId: 'LPBank', accountNo: '66195917116', accountName: 'TRAN HUYNH MINH DANG', amount, addInfo, qrUrl: '/img/payment-qr.jpg' } }, 201);
+  }
+  return json({ orderNo: no, totalCents: total, paymentMethod }, 201);
+}
+
+async function customerOrders({ env, user }) {
+  const { results } = await env.DB.prepare(`SELECT o.id, o.order_no, o.total_cents, o.status,
+    o.payment_method,
+    o.payment_status, o.created_at,
+    (SELECT COALESCE(SUM(qty),0) FROM order_items WHERE order_id = o.id) AS items_count
+    FROM orders o WHERE o.user_id = ? ORDER BY o.id DESC LIMIT 50`).bind(user.id).all();
+  for (const order of results) {
+    const { results: items } = await env.DB.prepare('SELECT name, name_vi, size, unit_price_cents, qty FROM order_items WHERE order_id = ? ORDER BY id').bind(order.id).all();
+    order.items = items;
+  }
+  return json({ orders: results });
+}
+
+async function customerProfile({ env, user }) {
+  const profile = await env.DB.prepare('SELECT username, email, name, phone, address, city, postal_code, country, password_hash, google_sub FROM users WHERE id = ?').bind(user.id).first();
+  profile.hasPassword = String(profile.password_hash).startsWith('pbkdf2$');
+  profile.hasGoogle = Boolean(profile.google_sub);
+  delete profile.password_hash;
+  delete profile.google_sub;
+  return json({ profile });
+}
+
+async function updateCustomerProfile({ env, request, user }) {
+  const b = await body(request), name = str(b.name, 'Name', 1, 100), e = email(b.email), prof = profileFields(b);
+  await env.DB.prepare('UPDATE users SET name = ?, email = ?, phone = ?, address = ?, city = ?, postal_code = ?, country = ? WHERE id = ?')
+    .bind(name, e, prof.phone, prof.address, prof.city, prof.postal_code, prof.country, user.id).run();
+  return customerProfile({ env, user });
+}
+
+async function sendCustomerPasswordCode({ env, user }) {
+  if (!(env.GMAIL_REFRESH_TOKEN && (env.GMAIL_CLIENT_ID || env.GOOGLE_CLIENT_ID) && (env.GMAIL_CLIENT_SECRET || env.GOOGLE_CLIENT_SECRET)) && !(env.RESEND_API_KEY && env.RESET_EMAIL_FROM)) throw new HttpError(503, 'Email sending is not configured. Ask the site owner to connect Gmail or Resend.');
+  const account = await env.DB.prepare('SELECT email, google_sub FROM users WHERE id = ? AND role = \'customer\'').bind(user.id).first();
+  if (!account) throw new HttpError(404, 'Account not found');
+  if (!account.google_sub) throw new HttpError(403, 'This account must be changed using its current password');
+  const timestamp = now(), existing = await env.DB.prepare('SELECT last_sent_at, window_started_at, send_count FROM password_reset_codes WHERE user_id = ?').bind(user.id).first();
+  if (existing && timestamp - existing.last_sent_at < 60) throw new HttpError(429, 'Please wait before requesting another code');
+  if (existing && timestamp - existing.window_started_at < 3600 && existing.send_count >= 5) throw new HttpError(429, 'Too many codes requested. Try again in an hour');
+  const bytes = randomBytes(4), number = ((bytes[0] * 0x1000000) + (bytes[1] << 16) + (bytes[2] << 8) + bytes[3]) % 1000000;
+  const code = String(number).padStart(6, '0'), codeHash = await sha256hex(`${user.id}:${code}:${env.RESEND_API_KEY}`);
+  await env.DB.prepare(`INSERT INTO password_reset_codes (user_id, code_hash, created_at, expires_at, attempts, last_sent_at, window_started_at, send_count, consumed_at)
+    VALUES (?, ?, ?, ?, 0, ?, ?, 1, 0) ON CONFLICT(user_id) DO UPDATE SET code_hash = excluded.code_hash, created_at = excluded.created_at,
+    expires_at = excluded.expires_at, attempts = 0, last_sent_at = excluded.last_sent_at,
+    window_started_at = CASE WHEN password_reset_codes.window_started_at < ? THEN excluded.window_started_at ELSE password_reset_codes.window_started_at END,
+    send_count = CASE WHEN password_reset_codes.window_started_at < ? THEN 1 ELSE password_reset_codes.send_count + 1 END, consumed_at = 0`)
+    .bind(user.id, codeHash, timestamp, timestamp + 600, timestamp, timestamp, timestamp - 3600, timestamp - 3600).run();
+  let emailSent = false;
+  try { emailSent = await sendShopEmail(env, { to: account.email, subject: 'Your Flex password verification code', text: `Your verification code is ${code}. It expires in 10 minutes. If you did not request this, ignore this email.` }); } catch (_) {}
+  if (!emailSent) {
+    await env.DB.prepare('DELETE FROM password_reset_codes WHERE user_id = ?').bind(user.id).run();
+    throw new HttpError(502, 'Could not send the email. Please try again later');
+  }
+  return json({ ok: true });
+}
+
+async function changeCustomerPassword({ env, request, user }) {
+  const b = await body(request), next = password(b.newPassword);
+  const account = await env.DB.prepare('SELECT password_hash, google_sub FROM users WHERE id = ? AND role = \'customer\'').bind(user.id).first();
+  if (!account) throw new HttpError(404, 'Account not found');
+  const hasPassword = String(account.password_hash).startsWith('pbkdf2$');
+  const linkedGoogle = Boolean(account.google_sub), current = typeof b.currentPassword === 'string' ? b.currentPassword.slice(0, 128) : '', resetCode = typeof b.resetCode === 'string' ? b.resetCode.trim() : '';
+  let codeRow;
+  if (!linkedGoogle || (hasPassword && current)) {
+    if (!hasPassword || resetCode) throw bad('Enter exactly one valid password verification method');
+    if (!(await verifyPassword(current, account.password_hash))) throw new HttpError(401, 'Current password is incorrect');
+    if (current === next) throw bad('Choose a password different from your current one');
+  } else {
+    if (!linkedGoogle || !/^\d{6}$/.test(resetCode) || current) throw bad('Enter the verification code sent to your email');
+    codeRow = await env.DB.prepare('SELECT code_hash, expires_at, attempts, consumed_at FROM password_reset_codes WHERE user_id = ?').bind(user.id).first();
+    if (!codeRow || codeRow.expires_at <= now() || codeRow.consumed_at || codeRow.attempts >= 5) throw new HttpError(401, 'Verification code is invalid or expired');
+    const codeHash = await sha256hex(`${user.id}:${resetCode}:${env.RESEND_API_KEY || ''}`);
+    if (!safeEqual(enc.encode(codeHash), enc.encode(codeRow.code_hash))) {
+      await env.DB.prepare('UPDATE password_reset_codes SET attempts = attempts + 1 WHERE user_id = ? AND consumed_at = 0').bind(user.id).run();
+      throw new HttpError(401, 'Verification code is incorrect');
+    }
+  }
+  const token = cookie(request, 'flex_session');
+  if (!token) throw new HttpError(401, 'Please sign in again');
+  const tokenHash = await sha256hex(token), newHash = await hashPassword(next);
+  if (codeRow) {
+    const consumed = await env.DB.prepare('UPDATE password_reset_codes SET consumed_at = ? WHERE user_id = ? AND expires_at > ? AND consumed_at = 0 AND attempts < 5')
+      .bind(now(), user.id, now()).run();
+    if (!consumed.meta.changes) throw new HttpError(401, 'Verification code is invalid or expired');
+  }
+  await env.DB.batch([
+    env.DB.prepare('UPDATE users SET password_hash = ?, failed_attempts = 0, locked_until = 0 WHERE id = ?').bind(newHash, user.id),
+    env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(user.id, tokenHash),
+  ]);
+  await audit(env, user, 'account.password_change');
+  return json({ ok: true, hasPassword: true });
+}
+
+async function cancelCustomerOrder({ env, user, params }) {
+  const id = int(params.id, 'Order', 1, 1e9);
+  const order = await env.DB.prepare('SELECT order_no, status FROM orders WHERE id = ? AND user_id = ?').bind(id, user.id).first();
+  if (!order) throw new HttpError(404, 'Order not found');
+  if (order.status !== 'pending') throw new HttpError(409, 'Only pending orders can be cancelled');
+  const { results: items } = await env.DB.prepare('SELECT product_id, qty FROM order_items WHERE order_id = ? AND product_id IS NOT NULL').bind(id).all();
+  const stmts = items.map((item) => env.DB.prepare(`UPDATE products SET stock = stock + ?, updated_at = ? WHERE id = ?
+    AND EXISTS (SELECT 1 FROM orders WHERE id = ? AND status = 'pending')`).bind(item.qty, now(), item.product_id, id));
+  stmts.push(env.DB.prepare("UPDATE orders SET status = 'cancelled' WHERE id = ? AND user_id = ? AND status = 'pending'").bind(id, user.id));
+  const changes = await env.DB.batch(stmts);
+  if (!changes[changes.length - 1].meta.changes) throw new HttpError(409, 'This order has already been updated');
+  return json({ ok: true, orderNo: order.order_no });
 }
 
 // ---------- admin handlers ----------
@@ -283,7 +531,7 @@ async function stats({ env }) {
     env.DB.prepare("SELECT COALESCE(SUM(total_cents),0) AS v FROM orders WHERE status != 'cancelled'"),
     env.DB.prepare('SELECT COUNT(*) AS v FROM orders'),
     env.DB.prepare("SELECT COUNT(*) AS v FROM users WHERE role = 'customer'"),
-    env.DB.prepare('SELECT COUNT(*) AS v FROM products WHERE stock <= 10'),
+    env.DB.prepare('SELECT COUNT(*) AS v FROM products WHERE stock > 0 AND stock < 10'),
     env.DB.prepare("SELECT date(created_at,'unixepoch') AS day, SUM(total_cents) AS v FROM orders WHERE status != 'cancelled' AND created_at >= ? GROUP BY day").bind(since),
     env.DB.prepare('SELECT id, order_no, name, total_cents, status FROM orders ORDER BY id DESC LIMIT 5'),
   ]);
@@ -299,20 +547,68 @@ async function stats({ env }) {
   });
 }
 
+function reportDayEpoch(value, field) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw bad(`${field} phải có định dạng YYYY-MM-DD.`);
+  const [year, month, day] = value.split('-').map(Number), utcMidnight = Date.UTC(year, month - 1, day);
+  if (new Date(utcMidnight).toISOString().slice(0, 10) !== value) throw bad(`${field} không hợp lệ.`);
+  const epoch = utcMidnight / 1000 - 7 * 3600;
+  return epoch;
+}
+async function adminReports({ env, url }) {
+  const from = url.searchParams.get('from'), to = url.searchParams.get('to');
+  const start = reportDayEpoch(from, 'Ngày bắt đầu'), end = reportDayEpoch(to, 'Ngày kết thúc') + 86400;
+  if (end <= start) throw bad('Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.');
+  if (end - start > 367 * 86400) throw bad('Khoảng thời gian báo cáo tối đa là 366 ngày.');
+  const [summary, daily, products, statuses, inventory, orders] = await env.DB.batch([
+    env.DB.prepare(`SELECT COUNT(*) AS orders,
+      COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total_cents ELSE 0 END),0) AS revenue_cents,
+      COALESCE(SUM(CASE WHEN payment_status = 'paid' AND status != 'cancelled' THEN total_cents ELSE 0 END),0) AS paid_cents,
+      COALESCE(SUM(CASE WHEN payment_status = 'pending' AND status != 'cancelled' THEN total_cents ELSE 0 END),0) AS unpaid_cents,
+      COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END),0) AS cancelled_orders
+      FROM orders WHERE created_at >= ? AND created_at < ?`).bind(start, end),
+    env.DB.prepare(`SELECT date(created_at,'unixepoch','+7 hours') AS day,
+      COUNT(*) AS orders, COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total_cents ELSE 0 END),0) AS revenue_cents
+      FROM orders WHERE created_at >= ? AND created_at < ? GROUP BY day ORDER BY day`).bind(start, end),
+    env.DB.prepare(`SELECT COALESCE(oi.name_vi, oi.name) AS name, SUM(oi.qty) AS quantity,
+      SUM(oi.unit_price_cents * oi.qty) AS revenue_cents
+      FROM order_items oi JOIN orders o ON o.id = oi.order_id
+      WHERE o.created_at >= ? AND o.created_at < ? AND o.status != 'cancelled'
+      GROUP BY oi.product_id, COALESCE(oi.name_vi, oi.name) ORDER BY quantity DESC, revenue_cents DESC LIMIT 10`).bind(start, end),
+    env.DB.prepare(`SELECT status, COUNT(*) AS orders FROM orders WHERE created_at >= ? AND created_at < ? GROUP BY status`).bind(start, end),
+    env.DB.prepare(`SELECT id, sku, COALESCE(name_vi, name) AS name, stock, price_cents, sale_price_cents,
+      CASE WHEN stock = 0 THEN 'out' WHEN stock < 10 THEN 'low' ELSE 'ok' END AS stock_status
+      FROM products WHERE status = 'active' ORDER BY stock ASC, name COLLATE NOCASE LIMIT 500`),
+    env.DB.prepare(`SELECT order_no, name, email, created_at, total_cents, status, payment_status, payment_method
+      FROM orders WHERE created_at >= ? AND created_at < ? ORDER BY created_at DESC LIMIT 5000`).bind(start, end),
+  ]);
+  const payments = (await env.DB.prepare(`SELECT payment_method AS method, COUNT(*) AS orders, COALESCE(SUM(total_cents),0) AS total_cents
+    FROM orders WHERE created_at >= ? AND created_at < ? AND status != 'cancelled' GROUP BY payment_method ORDER BY total_cents DESC`).bind(start, end).all()).results;
+  const totals = summary.results[0];
+  return json({ from, to, summary: { ...totals, average_order_cents: totals.orders ? Math.round(totals.revenue_cents / Math.max(1, totals.orders - totals.cancelled_orders)) : 0 },
+    daily: daily.results, topProducts: products.results, paymentMethods: payments, orderStatuses: statuses.results,
+    inventory: inventory.results, orders: orders.results });
+}
+
 function productFields(b) {
   const price = Number(b.priceCents);
-  if (!Number.isInteger(price) || price < 0 || price > 10000000) throw bad('Price must be a valid amount');
+  if (!Number.isInteger(price) || price < 0 || price > 50000000000) throw bad('Price must be a valid amount');
+  const salePrice = b.salePriceCents === '' || b.salePriceCents === null || b.salePriceCents === undefined ? null : Number(b.salePriceCents);
+  if (salePrice !== null && (!Number.isInteger(salePrice) || salePrice < 0 || salePrice >= price)) throw bad('Giá giảm phải nhỏ hơn giá gốc');
+  const sizes = [...new Set(Array.isArray(b.sizes) ? b.sizes.map((size) => oneOf(size, SIZES, 'Size')) : [])];
   return {
-    name: str(b.name, 'Name', 1, 100), department: oneOf(b.department, DEPTS, 'Department'),
-    category: oneOf(b.category, CATS, 'Category'), price_cents: price, stock: int(b.stock, 'Stock', 0, 1000000),
+    name: str(b.name, 'Name', 1, 100), name_vi: str(b.nameVi ?? '', 'Vietnamese name', 0, 100),
+    description: str(b.description ?? '', 'Description', 0, 2000), description_vi: str(b.descriptionVi ?? '', 'Vietnamese description', 0, 2000),
+    department: oneOf(b.department, DEPTS, 'Department'),
+    category: oneOf(b.category, CATS, 'Category'), price_cents: price, sale_price_cents: salePrice, stock: int(b.stock, 'Stock', 0, 1000000),
     status: oneOf(b.status, ['active', 'draft'], 'Status'), tag: oneOf(b.tag ?? '', TAGS, 'Tag'),
-    color: oneOf(b.color ?? 'blue', COLORS, 'Color'), featured: b.featured ? 1 : 0,
+    sizes, featured: b.featured ? 1 : 0,
   };
 }
 async function adminProducts({ env }) {
   const { results } = await env.DB.prepare(`SELECT p.*,
-    (SELECT url FROM product_images WHERE product_id = p.id ORDER BY position, id LIMIT 1) AS image_url,
-    (SELECT COUNT(*) FROM product_images WHERE product_id = p.id) AS image_count
+    (SELECT ${IMG_SRC} FROM product_images WHERE product_id = p.id ORDER BY position, id LIMIT 1) AS image_url,
+    (SELECT COUNT(*) FROM product_images WHERE product_id = p.id) AS image_count,
+    (SELECT GROUP_CONCAT(ps.size, ',') FROM product_sizes ps WHERE ps.product_id = p.id ORDER BY ps.position) AS sizes
     FROM products p ORDER BY p.id DESC`).all();
   return json({ products: results });
 }
@@ -321,17 +617,20 @@ async function createProduct({ env, request, user }) {
   const sku = b.sku ? str(b.sku, 'SKU', 2, 40).toUpperCase() : 'FX-' + b64url(randomBytes(4)).toUpperCase().replace(/[-_]/g, 'X');
   try {
     const t = now();
-    const r = await env.DB.prepare(`INSERT INTO products (sku,name,department,category,price_cents,stock,status,tag,color,featured,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(sku, f.name, f.department, f.category, f.price_cents, f.stock, f.status, f.tag, f.color, f.featured, t, t).run();
+    const r = await env.DB.prepare(`INSERT INTO products (sku,name,name_vi,description,description_vi,department,category,price_cents,sale_price_cents,stock,status,tag,featured,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(sku, f.name, f.name_vi, f.description, f.description_vi, f.department, f.category, f.price_cents, f.sale_price_cents, f.stock, f.status, f.tag, f.featured, t, t).run();
+    if (f.sizes.length) await env.DB.batch(f.sizes.map((size, position) => env.DB.prepare('INSERT INTO product_sizes (product_id, size, position) VALUES (?, ?, ?)').bind(r.meta.last_row_id, size, position)));
     await audit(env, user, 'product.create', `${f.name} (${sku})`);
     return json({ product: await env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(r.meta.last_row_id).first() }, 201);
   } catch (err) { if (isUnique(err)) throw new HttpError(409, 'That SKU already exists'); throw err; }
 }
 async function updateProduct({ env, request, user, params }) {
   const id = Number(params.id), f = productFields(await body(request));
-  const r = await env.DB.prepare(`UPDATE products SET name=?,department=?,category=?,price_cents=?,stock=?,status=?,tag=?,color=?,featured=?,updated_at=? WHERE id=?`)
-    .bind(f.name, f.department, f.category, f.price_cents, f.stock, f.status, f.tag, f.color, f.featured, now(), id).run();
+  const r = await env.DB.prepare(`UPDATE products SET name=?,name_vi=?,description=?,description_vi=?,department=?,category=?,price_cents=?,sale_price_cents=?,stock=?,status=?,tag=?,featured=?,updated_at=? WHERE id=?`)
+    .bind(f.name, f.name_vi, f.description, f.description_vi, f.department, f.category, f.price_cents, f.sale_price_cents, f.stock, f.status, f.tag, f.featured, now(), id).run();
   if (!r.meta.changes) throw new HttpError(404, 'Product not found');
+  await env.DB.prepare('DELETE FROM product_sizes WHERE product_id = ?').bind(id).run();
+  if (f.sizes.length) await env.DB.batch(f.sizes.map((size, position) => env.DB.prepare('INSERT INTO product_sizes (product_id, size, position) VALUES (?, ?, ?)').bind(id, size, position)));
   await audit(env, user, 'product.update', `#${id} ${f.name}`);
   return json({ product: await env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(id).first() });
 }
@@ -339,7 +638,9 @@ async function deleteProduct({ env, user, params }) {
   const id = Number(params.id);
   const p = await env.DB.prepare('SELECT name FROM products WHERE id = ?').bind(id).first();
   if (!p) throw new HttpError(404, 'Product not found');
-  await env.DB.prepare('DELETE FROM products WHERE id = ?').bind(id).run();   // product_images cascade-delete with it
+  const { results: files } = await env.DB.prepare('SELECT file_key FROM product_images WHERE product_id = ? AND file_key IS NOT NULL').bind(id).all();
+  await env.DB.prepare('DELETE FROM products WHERE id = ?').bind(id).run();   // product_images rows cascade-delete with it
+  if (env.IMAGES) await Promise.all(files.map((f) => env.IMAGES.delete(f.file_key).catch(() => {})));
   await audit(env, user, 'product.delete', `#${id} ${p.name}`);
   return json({ ok: true });
 }
@@ -354,7 +655,7 @@ async function listProductImages({ env, params }) {
   const productId = Number(params.id);
   const product = await env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(productId).first();
   if (!product) throw new HttpError(404, 'Product not found');
-  const { results } = await env.DB.prepare('SELECT * FROM product_images WHERE product_id = ? ORDER BY position, id').bind(productId).all();
+  const { results } = await env.DB.prepare(`SELECT *, ${IMG_SRC} AS src FROM product_images WHERE product_id = ? ORDER BY position, id`).bind(productId).all();
   return json({ images: results });
 }
 async function addProductImage({ env, request, user, params }) {
@@ -371,7 +672,7 @@ async function addProductImage({ env, request, user, params }) {
   const r = await env.DB.prepare('INSERT INTO product_images (product_id, url, alt_text, position, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .bind(productId, url, alt, position, width, height, now()).run();
   await audit(env, user, 'product.image_add', `product #${productId}`);
-  return json({ image: await env.DB.prepare('SELECT * FROM product_images WHERE id = ?').bind(r.meta.last_row_id).first() }, 201);
+  return json({ image: await env.DB.prepare(`SELECT *, ${IMG_SRC} AS src FROM product_images WHERE id = ?`).bind(r.meta.last_row_id).first() }, 201);
 }
 async function updateProductImage({ env, request, user, params }) {
   const id = Number(params.id);
@@ -395,9 +696,10 @@ async function setCoverImage({ env, user, params }) {
 }
 async function deleteProductImage({ env, user, params }) {
   const id = Number(params.id);
-  const img = await env.DB.prepare('SELECT product_id FROM product_images WHERE id = ?').bind(id).first();
+  const img = await env.DB.prepare('SELECT product_id, file_key FROM product_images WHERE id = ?').bind(id).first();
   if (!img) throw new HttpError(404, 'Image not found');
   await env.DB.prepare('DELETE FROM product_images WHERE id = ?').bind(id).run();
+  if (img.file_key && env.IMAGES) await env.IMAGES.delete(img.file_key).catch(() => {});
   await audit(env, user, 'product.image_delete', `product #${img.product_id} image #${id}`);
   return json({ ok: true });
 }
@@ -405,31 +707,34 @@ async function deleteProductImage({ env, user, params }) {
 async function adminOrders({ env, url }) {
   const status = url.searchParams.get('status');
   const where = ORDER_STATUS.includes(status) ? 'WHERE o.status = ?' : '';
+  const limit = url.searchParams.get('export') === '1' ? 5000 : 200;
   const stmt = env.DB.prepare(`SELECT o.id, o.order_no, o.name, o.email, o.total_cents, o.status, o.created_at,
     (SELECT COALESCE(SUM(qty),0) FROM order_items WHERE order_id = o.id) AS items
-    FROM orders o ${where} ORDER BY o.id DESC LIMIT 200`);
-  const { results } = await (where ? stmt.bind(status) : stmt).all();
+    FROM orders o ${where} ORDER BY o.id DESC LIMIT ?`);
+  const { results } = await (where ? stmt.bind(status, limit) : stmt.bind(limit)).all();
   return json({ orders: results });
 }
 async function orderDetail({ env, params }) {
   const id = Number(params.id);
   const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first();
   if (!order) throw new HttpError(404, 'Order not found');
-  const { results } = await env.DB.prepare('SELECT name, unit_price_cents, qty FROM order_items WHERE order_id = ?').bind(id).all();
+  const { results } = await env.DB.prepare('SELECT name, size, unit_price_cents, qty FROM order_items WHERE order_id = ?').bind(id).all();
   return json({ order, items: results });
 }
 async function updateOrder({ env, request, user, params }) {
-  const id = Number(params.id), status = oneOf((await body(request)).status, ORDER_STATUS, 'Status');
+  const id = Number(params.id), b = await body(request);
   const order = await env.DB.prepare('SELECT id, order_no, status FROM orders WHERE id = ?').bind(id).first();
   if (!order) throw new HttpError(404, 'Order not found');
-  if (order.status === 'cancelled') throw new HttpError(409, 'Cancelled orders cannot be changed');
-  const stmts = [env.DB.prepare('UPDATE orders SET status = ? WHERE id = ?').bind(status, id)];
-  if (status === 'cancelled') {                       // put the stock back
+  const status = b.status === undefined ? order.status : oneOf(b.status, ORDER_STATUS, 'Status');
+  const paymentStatus = b.paymentStatus === undefined ? null : oneOf(b.paymentStatus, ['pending', 'paid', 'refunded'], 'Payment status');
+  if (order.status === 'cancelled' && status !== 'cancelled') throw new HttpError(409, 'Cancelled orders cannot be changed');
+  const stmts = [env.DB.prepare('UPDATE orders SET status = ?, payment_status = COALESCE(?, payment_status) WHERE id = ?').bind(status, paymentStatus, id)];
+  if (status === 'cancelled' && order.status !== 'cancelled') { // put the stock back once
     const { results } = await env.DB.prepare('SELECT product_id, qty FROM order_items WHERE order_id = ? AND product_id IS NOT NULL').bind(id).all();
     for (const it of results) stmts.push(env.DB.prepare('UPDATE products SET stock = stock + ?, updated_at = ? WHERE id = ?').bind(it.qty, now(), it.product_id));
   }
   await env.DB.batch(stmts);
-  await audit(env, user, 'order.status', `${order.order_no}: ${order.status} -> ${status}`);
+  await audit(env, user, paymentStatus ? 'order.payment' : 'order.status', `${order.order_no}: status ${order.status} -> ${status}${paymentStatus ? `, payment -> ${paymentStatus}` : ''}`);
   return json({ ok: true });
 }
 
@@ -441,14 +746,26 @@ async function adminDrops({ env }) {
 async function createDrop({ env, request, user }) {
   const b = await body(request);
   const name = str(b.name, 'Name', 1, 100), date = str(b.releaseDate, 'Release date', 1, 40), desc = str(b.description ?? '', 'Description', 0, 500);
-  await env.DB.prepare('INSERT INTO drops (name, description, release_date, created_at) VALUES (?, ?, ?, ?)').bind(name, desc, date, now()).run();
+  const nameVi = str(b.nameVi ?? '', 'Vietnamese name', 1, 100), descVi = str(b.descriptionVi ?? '', 'Vietnamese description', 0, 500);
+  const result = await env.DB.prepare('INSERT INTO drops (name, name_vi, description, description_vi, release_date, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(name, nameVi, desc, descVi, date, now()).run();
   await audit(env, user, 'drop.create', name);
-  return json({ ok: true }, 201);
+  return json({ ok: true, id: result.meta.last_row_id }, 201);
+}
+async function updateDrop({ env, request, user, params }) {
+  const id = Number(params.id), b = await body(request);
+  const name = str(b.name, 'Name', 1, 100), nameVi = str(b.nameVi ?? '', 'Vietnamese name', 1, 100);
+  const date = str(b.releaseDate, 'Release date', 1, 40), desc = str(b.description ?? '', 'Description', 0, 500), descVi = str(b.descriptionVi ?? '', 'Vietnamese description', 0, 500);
+  const result = await env.DB.prepare('UPDATE drops SET name=?, name_vi=?, description=?, description_vi=?, release_date=? WHERE id=?').bind(name, nameVi, desc, descVi, date, id).run();
+  if (!result.meta.changes) throw new HttpError(404, 'Drop not found');
+  await audit(env, user, 'drop.update', name);
+  return json({ ok: true });
 }
 async function deleteDrop({ env, user, params }) {
-  const d = await env.DB.prepare('SELECT name FROM drops WHERE id = ?').bind(Number(params.id)).first();
+  const d = await env.DB.prepare('SELECT name, image_url FROM drops WHERE id = ?').bind(Number(params.id)).first();
   if (!d) throw new HttpError(404, 'Drop not found');
   await env.DB.prepare('DELETE FROM drops WHERE id = ?').bind(Number(params.id)).run();
+  const oldKey = String(d.image_url || '').match(/^\/api\/img\/(p\d+-[A-Za-z0-9_-]{16}\.(?:png|jpg|webp))$/);
+  if (oldKey && env.IMAGES) await env.IMAGES.delete(oldKey[1]).catch(() => {});
   await audit(env, user, 'drop.delete', d.name);
   return json({ ok: true });
 }
@@ -469,7 +786,7 @@ async function deleteMessage({ env, user, params }) {
 }
 
 async function adminUsers({ env }) {
-  const { results } = await env.DB.prepare(`SELECT u.id, u.email, u.name, u.role, u.status, u.created_at, u.last_login_at, u.locked_until,
+  const { results } = await env.DB.prepare(`SELECT u.id, u.username, u.email, u.name, u.phone, u.google_sub IS NOT NULL AS has_google, u.role, u.status, u.created_at, u.last_login_at, u.locked_until,
     (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id AND o.status != 'cancelled') AS orders,
     (SELECT COALESCE(SUM(total_cents),0) FROM orders o WHERE o.user_id = u.id AND o.status != 'cancelled') AS spent_cents
     FROM users u ORDER BY u.id DESC LIMIT 500`).all();
@@ -477,50 +794,286 @@ async function adminUsers({ env }) {
 }
 async function createUser({ env, request, user }) {
   const b = await body(request);
-  const e = email(b.email), name = str(b.name, 'Name', 1, 100), role = oneOf(b.role ?? 'customer', ['customer', 'staff', 'admin'], 'Role');
-  const hash = await hashPassword(role === 'admin' ? adminPassword(b.password) : password(b.password));
+  const un = username(b.username), e = email(b.email), name = str(b.name, 'Name', 1, 100), role = oneOf(b.role ?? 'customer', ['customer', 'staff', 'admin'], 'Role');
+  const hash = await hashPassword(password(b.password));
   try {
-    await env.DB.prepare('INSERT INTO users (email, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)').bind(e, name, hash, role, now()).run();
-  } catch (err) { if (isUnique(err)) throw new HttpError(409, 'That email is already registered'); throw err; }
-  await audit(env, user, 'user.create', `${e} (${role})`);
+    await env.DB.prepare('INSERT INTO users (username, email, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(un, e, name, hash, role, now()).run();
+  } catch (err) {
+    if (isUsernameConflict(err)) throw new HttpError(409, 'That username is already taken');
+    if (isUnique(err)) throw new HttpError(409, 'This account conflicts with an existing email or Google account.');
+    throw err;
+  }
+  await audit(env, user, 'user.create', `${un} (${role})`);
   return json({ ok: true }, 201);
 }
 async function updateUser({ env, request, user, params }) {
   const id = Number(params.id), b = await body(request);
-  const target = await env.DB.prepare('SELECT id, email FROM users WHERE id = ?').bind(id).first();
+  const target = await env.DB.prepare('SELECT id, username FROM users WHERE id = ?').bind(id).first();
   if (!target) throw new HttpError(404, 'User not found');
-  const name = str(b.name, 'Name', 1, 100), role = oneOf(b.role, ['customer', 'staff', 'admin'], 'Role'), status = oneOf(b.status, ['active', 'disabled'], 'Status');
+  const un = username(b.username), e = email(b.email), name = str(b.name, 'Name', 1, 100);
+  const role = oneOf(b.role, ['customer', 'staff', 'admin'], 'Role'), status = oneOf(b.status, ['active', 'disabled'], 'Status');
   if (id === user.id && (role !== user.role || status !== 'active')) throw new HttpError(409, 'You cannot change your own role or disable yourself');
-  const stmts = [env.DB.prepare('UPDATE users SET name = ?, role = ?, status = ? WHERE id = ?').bind(name, role, status, id)];
-  stmts.push(env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id));      // force re-login after any change
-  await env.DB.batch(stmts);
-  await audit(env, user, 'user.update', `${target.email}: role=${role}, status=${status}`);
+  try {
+    await env.DB.batch([
+      env.DB.prepare('UPDATE users SET username = ?, email = ?, name = ?, role = ?, status = ? WHERE id = ?').bind(un, e, name, role, status, id),
+      env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id),   // force re-login after any change
+    ]);
+  } catch (err) {
+    if (isUsernameConflict(err)) throw new HttpError(409, 'That username is already taken');
+    if (isUnique(err)) throw new HttpError(409, 'This account conflicts with an existing email or Google account.');
+    throw err;
+  }
+  await audit(env, user, 'user.update', `${target.username} -> ${un}: role=${role}, status=${status}`);
   return json({ ok: true });
 }
 async function resetPassword({ env, request, user, params }) {
   const id = Number(params.id), pw = (await body(request)).password;
-  const target = await env.DB.prepare('SELECT email, role FROM users WHERE id = ?').bind(id).first();
+  const target = await env.DB.prepare('SELECT username FROM users WHERE id = ?').bind(id).first();
   if (!target) throw new HttpError(404, 'User not found');
-  const hash = await hashPassword(target.role === 'admin' ? adminPassword(pw) : password(pw));
+  const hash = await hashPassword(password(pw));
   await env.DB.batch([
     env.DB.prepare('UPDATE users SET password_hash = ?, failed_attempts = 0, locked_until = 0 WHERE id = ?').bind(hash, id),
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id),
   ]);
-  await audit(env, user, 'user.password_reset', target.email);
+  await audit(env, user, 'user.password_reset', target.username);
   return json({ ok: true });
 }
 async function deleteUser({ env, user, params }) {
   const id = Number(params.id);
   if (id === user.id) throw new HttpError(409, 'You cannot delete your own account');
-  const target = await env.DB.prepare('SELECT email FROM users WHERE id = ?').bind(id).first();
+  const target = await env.DB.prepare('SELECT username FROM users WHERE id = ?').bind(id).first();
   if (!target) throw new HttpError(404, 'User not found');
   await env.DB.prepare('DELETE FROM users WHERE id = ?').bind(id).run();   // orders keep history (user_id set to NULL)
-  await audit(env, user, 'user.delete', target.email);
+  await audit(env, user, 'user.delete', target.username);
   return json({ ok: true });
 }
 async function auditLog({ env }) {
   const { results } = await env.DB.prepare('SELECT actor, action, detail, created_at FROM audit_log ORDER BY id DESC LIMIT 100').all();
   return json({ entries: results });
+}
+
+// ---------- personal details ----------
+function profileFields(b) {
+  const phone = str(b.phone, 'Phone number', 7, 20);
+  if (!/^[0-9+\-().\s]+$/.test(phone) || phone.replace(/\D/g, '').length < 7) throw bad('Enter a valid phone number');
+  return {
+    phone,
+    address: str(b.address, 'Address', 3, 200),
+    city: str(b.city, 'City', 2, 100),
+    postal_code: str(b.postalCode ?? '', 'Postal code', 0, 20),
+    country: str(b.country ?? '', 'Country', 0, 100),
+  };
+}
+
+// ---------- photo uploads (Workers KV: free, holds files up to 25 MB) ----------
+const MAX_UPLOAD = 5 * 1024 * 1024;
+const MAX_IMAGES = 12;
+const IMG_TYPES = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' };
+const IMG_KEY_RE = /^p\d+-[A-Za-z0-9_-]{16}\.(png|jpg|webp)$/;
+
+// Decide the type from the file's own bytes. The filename and the browser-sent type are never trusted (that is how disguised files slip in).
+function sniffImage(b) {
+  if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 && b[4] === 0x0d && b[5] === 0x0a && b[6] === 0x1a && b[7] === 0x0a) return 'png';
+  if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpg';
+  if (b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'webp';
+  return null;
+}
+
+async function uploadProductImage({ env, request, user, params }) {
+  if (!env.IMAGES) throw new HttpError(503, 'Photo storage is not set up yet (the KV namespace binding named IMAGES is missing).');
+  const productId = Number(params.id);
+  const product = await env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(productId).first();
+  if (!product) throw new HttpError(404, 'Product not found');
+  if (Number(request.headers.get('content-length') || 0) > MAX_UPLOAD + 200000) throw new HttpError(413, 'That file is too large (5 MB maximum)');
+  let form;
+  try { form = await request.formData(); } catch { throw bad('Upload the photo as a form file'); }
+  const file = form.get('file');
+  if (!file || typeof file === 'string' || typeof file.arrayBuffer !== 'function') throw bad('Choose an image file to upload');
+  if (file.size === 0) throw bad('That file is empty');
+  if (file.size > MAX_UPLOAD) throw new HttpError(413, 'That file is too large (5 MB maximum)');
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  const ext = sniffImage(bytes);
+  if (!ext) throw new HttpError(415, 'Only PNG, JPG or WebP photos are allowed');
+  const alt = str(String(form.get('altText') ?? ''), 'Alt text', 0, 200);
+  const { count } = await env.DB.prepare('SELECT COUNT(*) AS count FROM product_images WHERE product_id = ?').bind(productId).first();
+  if (count >= MAX_IMAGES) throw bad(`A product can have at most ${MAX_IMAGES} photos`);
+  const key = `p${productId}-${b64url(randomBytes(12))}.${ext}`;
+  await env.IMAGES.put(key, buf);
+  let id;
+  try {
+    const r = await env.DB.prepare('INSERT INTO product_images (product_id, file_key, content_type, size_bytes, alt_text, position, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(productId, key, IMG_TYPES[ext], bytes.length, alt, count, now()).run();
+    id = r.meta.last_row_id;
+  } catch (err) { await env.IMAGES.delete(key).catch(() => {}); throw err; }   // never leave an orphaned file behind
+  await audit(env, user, 'product.image_upload', `product #${productId} (${(bytes.length / 1024).toFixed(0)} KB ${ext})`);
+  return json({ image: await env.DB.prepare(`SELECT *, ${IMG_SRC} AS src FROM product_images WHERE id = ?`).bind(id).first() }, 201);
+}
+
+async function uploadDropImage({ env, request, user, params }) {
+  if (!env.IMAGES) throw new HttpError(503, 'Photo storage is not set up yet (the KV namespace binding named IMAGES is missing).');
+  const dropId = Number(params.id), drop = await env.DB.prepare('SELECT id, image_url FROM drops WHERE id = ?').bind(dropId).first();
+  if (!drop) throw new HttpError(404, 'Drop not found');
+  if (Number(request.headers.get('content-length') || 0) > MAX_UPLOAD + 200000) throw new HttpError(413, 'That file is too large (5 MB maximum)');
+  let form;
+  try { form = await request.formData(); } catch { throw bad('Upload the photo as a form file'); }
+  const file = form.get('file');
+  if (!file || typeof file === 'string' || typeof file.arrayBuffer !== 'function') throw bad('Choose an image file to upload');
+  if (!file.size) throw bad('That file is empty');
+  if (file.size > MAX_UPLOAD) throw new HttpError(413, 'That file is too large (5 MB maximum)');
+  const bytes = new Uint8Array(await file.arrayBuffer()), ext = sniffImage(bytes);
+  if (!ext) throw new HttpError(415, 'Only PNG, JPG or WebP photos are allowed');
+  const key = `p0-${b64url(randomBytes(12))}.${ext}`, imageUrl = `/api/img/${key}`;
+  await env.IMAGES.put(key, bytes);
+  try { await env.DB.prepare('UPDATE drops SET image_url = ? WHERE id = ?').bind(imageUrl, dropId).run(); }
+  catch (err) { await env.IMAGES.delete(key).catch(() => {}); throw err; }
+  const oldKey = String(drop.image_url || '').match(/^\/api\/img\/(p\d+-[A-Za-z0-9_-]{16}\.(?:png|jpg|webp))$/);
+  if (oldKey && env.IMAGES) await env.IMAGES.delete(oldKey[1]).catch(() => {});
+  await audit(env, user, 'drop.image_upload', `drop #${dropId} (${(bytes.length / 1024).toFixed(0)} KB ${ext})`);
+  return json({ ok: true, imageUrl }, 201);
+}
+
+async function serveImage({ env, params }) {
+  if (!env.IMAGES || !IMG_KEY_RE.test(params.key)) throw new HttpError(404, 'Not found');
+  const file = await env.IMAGES.get(params.key, 'arrayBuffer');
+  if (!file) throw new HttpError(404, 'Not found');
+  return new Response(file, { headers: {
+    'Content-Type': IMG_TYPES[params.key.split('.').pop()],           // from the key, which was set from the sniffed bytes at upload
+    'Cache-Control': 'public, max-age=31536000, immutable',           // keys are random and never reused, so this is safe
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'; sandbox",
+  } });
+}
+
+// ---------- Google sign-in (OAuth 2.0 authorization code flow with PKCE) ----------
+const GOOGLE_AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
+const GOOGLE_TOKEN = 'https://oauth2.googleapis.com/token';
+const oauthCookie = (value, maxAge) => `flex_oauth=${value}; HttpOnly; Secure; SameSite=Lax; Path=/api/auth/google; Max-Age=${maxAge}`;       // Lax: must survive the trip back from Google
+const pendingCookie = (value, maxAge) => `flex_oauth_pending=${value}; HttpOnly; Secure; SameSite=Strict; Path=/api/auth/google; Max-Age=${maxAge}`;
+const googleConfigured = (env) => Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+const fromB64url = (s) => unb64(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4));
+
+// Only ever send people back to a page on this site (blocks open-redirect tricks like //evil.com or tab/backslash tricks).
+function safeNext(v) {
+  if (typeof v !== 'string' || v.length > 300 || v[0] !== '/' || v[1] === '/' || /[\x00-\x1f\x7f\\]/.test(v)) return '/';
+  return v;
+}
+function redirect(location, cookies = []) {
+  const h = new Headers({ Location: location, 'Cache-Control': 'no-store' });
+  for (const c of cookies) h.append('Set-Cookie', c);
+  return new Response(null, { status: 302, headers: h });
+}
+function jsonCookies(data, status, cookies) {
+  const h = new Headers(SEC_HEADERS);
+  for (const c of cookies) h.append('Set-Cookie', c);
+  return new Response(JSON.stringify(data), { status, headers: h });
+}
+const withParam = (next, k, v) => { const [path] = next.split('#'); return path + (path.includes('?') ? '&' : '?') + k + '=' + encodeURIComponent(v); };
+
+function readOauthCookie(request) {
+  try {
+    const raw = cookie(request, 'flex_oauth');
+    if (!raw) return null;
+    const o = JSON.parse(new TextDecoder().decode(fromB64url(raw)));
+    return typeof o.state === 'string' && typeof o.verifier === 'string' ? o : null;
+  } catch { return null; }
+}
+
+async function googleStart({ env, url }) {
+  const next = safeNext(url.searchParams.get('next'));
+  if (!googleConfigured(env)) return redirect(withParam(next, 'auth_error', 'google_not_configured'));
+  const state = b64url(randomBytes(24)), verifier = b64url(randomBytes(32));
+  const challenge = b64url(new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(verifier))));
+  const q = new URLSearchParams({
+    client_id: env.GOOGLE_CLIENT_ID, redirect_uri: url.origin + '/api/auth/google/callback', response_type: 'code',
+    scope: 'openid email profile', state, code_challenge: challenge, code_challenge_method: 'S256', prompt: 'select_account',
+  });
+  return redirect(GOOGLE_AUTH + '?' + q, [oauthCookie(b64url(enc.encode(JSON.stringify({ state, verifier, next }))), 600)]);
+}
+
+// Google hands us a token directly over TLS, so we don't re-check its signature, but we do check who it is for and that it is fresh.
+function googleClaims(idToken, env) {
+  const parts = String(idToken || '').split('.');
+  if (parts.length !== 3) return null;
+  let c;
+  try { c = JSON.parse(new TextDecoder().decode(fromB64url(parts[1]))); } catch { return null; }
+  const issuerOk = c.iss === 'https://accounts.google.com' || c.iss === 'accounts.google.com';
+  if (!issuerOk || c.aud !== env.GOOGLE_CLIENT_ID || !(c.exp > now()) || typeof c.sub !== 'string' || !c.sub || typeof c.email !== 'string') return null;
+  return c;
+}
+
+async function googleCallback({ env, request, url }) {
+  const saved = readOauthCookie(request);
+  const next = safeNext(saved && saved.next);
+  const clear = oauthCookie('', 0);
+  const fail = (code) => redirect(withParam(next, 'auth_error', code), [clear]);
+  try {
+    if (!googleConfigured(env)) return fail('google_not_configured');
+    if (url.searchParams.get('error')) return fail('google_denied');
+    const code = url.searchParams.get('code'), state = url.searchParams.get('state');
+    if (!saved || !code || !state || !safeEqual(enc.encode(state), enc.encode(saved.state))) return fail('google_state');
+    const tokenRes = await fetch(GOOGLE_TOKEN, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: AbortSignal.timeout(8000),
+      body: new URLSearchParams({ code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: url.origin + '/api/auth/google/callback', grant_type: 'authorization_code', code_verifier: saved.verifier }),
+    });
+    if (!tokenRes.ok) return fail('google_failed');
+    const claims = googleClaims((await tokenRes.json()).id_token, env);
+    if (!claims) return fail('google_failed');
+    if (claims.email_verified !== true && claims.email_verified !== 'true') return fail('google_unverified');
+
+    const existing = await env.DB.prepare('SELECT * FROM users WHERE google_sub = ?').bind(claims.sub).first();
+    if (existing) {
+      if (existing.status !== 'active') return fail('account_disabled');
+      await env.DB.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').bind(now(), existing.id).run();
+      // Google sign-in is a storefront flow; never create an admin-scoped cookie here.
+      if (existing.role !== 'customer') return fail('account_role');
+      return redirect(next, [clear, await startSession(env, existing, 'customer')]);
+    }
+    // First time with Google: park the verified identity and ask for the personal details.
+    // (We never match on email: email isn't verified on password accounts, so that would allow account takeover.)
+    const token = b64url(randomBytes(32));
+    const name = String(claims.name || claims.email.split('@')[0]).slice(0, 100);
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM oauth_pending WHERE expires_at < ?').bind(now()),
+      env.DB.prepare('INSERT INTO oauth_pending (token_hash, google_sub, email, name, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(await sha256hex(token), claims.sub, claims.email, name, now(), now() + 900),
+    ]);
+    return redirect('/register.html?google=1&next=' + encodeURIComponent(next), [clear, pendingCookie(token, 900)]);
+  } catch (err) {
+    console.error(err);
+    return fail('google_failed');
+  }
+}
+
+async function pendingIdentity(env, request) {
+  const t = cookie(request, 'flex_oauth_pending');
+  if (!t) return null;
+  return env.DB.prepare('SELECT * FROM oauth_pending WHERE token_hash = ? AND expires_at > ?').bind(await sha256hex(t), now()).first();
+}
+async function googlePending({ env, request }) {
+  const p = await pendingIdentity(env, request);
+  if (!p) throw new HttpError(404, 'Your Google sign-in expired. Please start again.');
+  return json({ email: p.email, name: p.name });
+}
+async function googleComplete({ env, request }) {
+  const p = await pendingIdentity(env, request);
+  if (!p) throw new HttpError(404, 'Your Google sign-in expired. Please start again.');
+  const b = await body(request);
+  const un = username(b.username), name = str(b.name, 'Name', 1, 100), prof = profileFields(b);
+  const pwHash = b.password ? await hashPassword(password(b.password)) : 'oauth$google';
+  let id;
+  try {
+    const r = await env.DB.prepare('INSERT INTO users (username, email, name, password_hash, phone, address, city, postal_code, country, google_sub, created_at, last_login_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(un, p.email, name, pwHash, prof.phone, prof.address, prof.city, prof.postal_code, prof.country, p.google_sub, now(), now()).run();   // 'oauth$google' can never match a password
+    id = r.meta.last_row_id;
+  } catch (err) {
+    if (isUnique(err)) throw new HttpError(409, /google_sub/.test(String(err.message)) ? 'This Google account already has an account here. Use "Continue with Google" to sign in.' : 'That username is already taken');
+    throw err;
+  }
+  await env.DB.prepare('DELETE FROM oauth_pending WHERE token_hash = ?').bind(p.token_hash).run();
+  const user = { id, username: un, email: p.email, name, role: 'customer' };
+  return jsonCookies({ user: publicUser(user) }, 201, [await startSession(env, user, 'customer'), pendingCookie('', 0)]);
 }
 
 // ---------- router ----------
@@ -530,15 +1083,27 @@ add('POST', '/api/setup', setup, 'public');
 add('POST', '/api/auth/register', register, 'public');
 add('POST', '/api/auth/login', login, 'public');
 add('POST', '/api/auth/logout', logout, 'public');
-add('POST', '/api/admin/login', adminLogin, 'public');
 add('GET', '/api/auth/me', me, 'public');
+add('GET', '/api/auth/google/start', googleStart, 'public');
+add('GET', '/api/auth/google/callback', googleCallback, 'public');
+add('GET', '/api/auth/google/pending', googlePending, 'public');
+add('POST', '/api/auth/google/complete', googleComplete, 'public');
 add('GET', '/api/products', listProducts, 'public');
 add('GET', '/api/products/:id', productDetail, 'public');
+add('GET', '/api/img/:key', serveImage, 'public');
 add('GET', '/api/drops', listDropsPublic, 'public');
 add('POST', '/api/drops/:id/subscribe', subscribe, 'customer');
 add('POST', '/api/contact', contact, 'public');
 add('POST', '/api/orders', checkout, 'customer');
+add('GET', '/api/orders', customerOrders, 'customer');
+add('GET', '/api/payments/methods', paymentMethods, 'public');
+add('GET', '/api/account/profile', customerProfile, 'customer');
+add('PUT', '/api/account/profile', updateCustomerProfile, 'customer');
+add('POST', '/api/account/password', changeCustomerPassword, 'customer');
+add('POST', '/api/account/password-code', sendCustomerPasswordCode, 'customer');
+add('POST', '/api/orders/:id/cancel', cancelCustomerOrder, 'customer');
 add('GET', '/api/admin/stats', stats, 'staff');
+add('GET', '/api/admin/reports', adminReports, 'staff');
 add('GET', '/api/admin/products', adminProducts, 'staff');
 add('POST', '/api/admin/products', createProduct, 'staff');
 add('PUT', '/api/admin/products/:id', updateProduct, 'staff');
@@ -547,12 +1112,15 @@ add('GET', '/api/admin/products/:id/images', listProductImages, 'staff');
 add('POST', '/api/admin/products/:id/images', addProductImage, 'staff');
 add('PUT', '/api/admin/images/:id', updateProductImage, 'staff');
 add('POST', '/api/admin/images/:id/cover', setCoverImage, 'staff');
+add('POST', '/api/admin/products/:id/images/upload', uploadProductImage, 'staff');
 add('DELETE', '/api/admin/images/:id', deleteProductImage, 'staff');
 add('GET', '/api/admin/orders', adminOrders, 'staff');
 add('GET', '/api/admin/orders/:id', orderDetail, 'staff');
 add('PUT', '/api/admin/orders/:id', updateOrder, 'staff');
 add('GET', '/api/admin/drops', adminDrops, 'staff');
 add('POST', '/api/admin/drops', createDrop, 'staff');
+add('PUT', '/api/admin/drops/:id', updateDrop, 'staff');
+add('POST', '/api/admin/drops/:id/image', uploadDropImage, 'staff');
 add('DELETE', '/api/admin/drops/:id', deleteDrop, 'staff');
 add('GET', '/api/admin/messages', adminMessages, 'staff');
 add('PUT', '/api/admin/messages/:id', updateMessage, 'staff');
@@ -566,12 +1134,12 @@ add('GET', '/api/admin/audit', auditLog, 'admin');
 
 export async function onRequest({ request, env }) {
   try {
-    if (!env.DB) throw new Error('D1 binding "DB" is not configured');
+    if (!env.DB) throw new Error('Cơ sở dữ liệu chưa được cấu hình.');
     const url = new URL(request.url);
     const method = request.method;
     if (method !== 'GET') {                                    // CSRF defence in depth (cookie is also SameSite=Strict)
       const origin = request.headers.get('origin');
-      if (origin && new URL(origin).host !== url.host) throw new HttpError(403, 'Cross-origin request blocked');
+      if (origin && new URL(origin).host !== url.host) throw new HttpError(403, 'Yêu cầu không hợp lệ. Vui lòng tải lại trang.');
     }
     let match = null, pathMatched = false;
     for (const r of routes) {
@@ -580,18 +1148,19 @@ export async function onRequest({ request, env }) {
       pathMatched = true;
       if (r.method === method) { match = { r, params: m.groups || {} }; break; }
     }
-    if (!match) throw new HttpError(pathMatched ? 405 : 404, pathMatched ? 'Method not allowed' : 'Not found');
-    const user = await currentUser(env, request);
+    if (!match) throw new HttpError(pathMatched ? 405 : 404, pathMatched ? 'Thao tác này không được hỗ trợ.' : 'Không tìm thấy nội dung yêu cầu.');
     const { access } = match.r;
+    const authScope = access === 'staff' || access === 'admin' || (url.pathname === '/api/auth/me' && url.searchParams.get('scope') === 'admin') ? 'admin' : 'customer';
+    const user = await currentUser(env, request, authScope);
     if (access !== 'public') {
-      if (!user) throw new HttpError(401, 'Please sign in');
+      if (!user) throw new HttpError(401, 'Vui lòng đăng nhập để tiếp tục.');
       const allowed = { customer: ['customer', 'staff', 'admin'], staff: ['staff', 'admin'], admin: ['admin'] }[access];
-      if (!allowed.includes(user.role)) throw new HttpError(403, 'You do not have permission to do that');
+      if (!allowed.includes(user.role)) throw new HttpError(403, 'Bạn không có quyền thực hiện thao tác này.');
     }
     return await match.r.handler({ request, env, url, user, params: match.params });
   } catch (err) {
     if (err instanceof HttpError) return json({ error: err.message }, err.status);
     console.error(err);
-    return json({ error: 'Server error' }, 500);
+    return json({ error: 'Máy chủ gặp lỗi. Vui lòng thử lại sau.' }, 500);
   }
 }
