@@ -326,8 +326,13 @@ async function productDetail({ env, params }) {
   return json({ product, images: results });
 }
 
-async function listDropsPublic({ env }) {
-  const { results } = await env.DB.prepare('SELECT id, name, name_vi, description, description_vi, release_date, image_url FROM drops ORDER BY id').all();
+async function listDropsPublic({ env, user }) {
+  const email = user ? user.email : '';
+  const { results } = await env.DB.prepare(`SELECT d.id, d.name, d.name_vi, d.description, d.description_vi, d.release_date, d.image_url,
+    CASE WHEN ? != '' AND EXISTS (
+      SELECT 1 FROM drop_subscribers s WHERE s.drop_id = d.id AND lower(s.email) = lower(?)
+    ) THEN 1 ELSE 0 END AS subscribed
+    FROM drops d ORDER BY d.id`).bind(email, email).all();
   return json({ drops: results });
 }
 

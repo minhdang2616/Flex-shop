@@ -744,14 +744,18 @@ document.addEventListener('DOMContentLoaded', function () {
     dropgrid.innerHTML = r.drops.length ? r.drops.map(function (d, i) {
       var name = d.name_vi || d.name, desc = d.description_vi || 'Thông tin sản phẩm đang được cập nhật.';
       var parsedDate = new Date(d.release_date), releaseDate = isNaN(parsedDate.getTime()) ? d.release_date : parsedDate.toLocaleDateString(languageIsVietnamese() ? 'vi-VN' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' });
-      return '<div class="dropcard"><div class="swatch ' + (d.image_url ? 'has-photo' : '') + '" style="--swatch-c:var(--' + colors[i % 4] + ');">' + (d.image_url ? '<img src="' + esc(d.image_url) + '" alt="' + esc(name) + '" loading="lazy">' : '') + '</div><span class="dropdate">Sản phẩm ra mắt ' + esc(releaseDate) + '</span><h3>' + esc(name) + '</h3><p>' + esc(desc) + '</p><button class="notifybtn" data-id="' + d.id + '">Nhận thông báo</button></div>';
+      var subscribed = Number(d.subscribed) === 1;
+      return '<div class="dropcard"><div class="swatch ' + (d.image_url ? 'has-photo' : '') + '" style="--swatch-c:var(--' + colors[i % 4] + ');">' + (d.image_url ? '<img src="' + esc(d.image_url) + '" alt="' + esc(name) + '" loading="lazy">' : '') + '</div><span class="dropdate">Sản phẩm ra mắt ' + esc(releaseDate) + '</span><h3>' + esc(name) + '</h3><p>' + esc(desc) + '</p><button class="notifybtn' + (subscribed ? ' done' : '') + '" data-id="' + d.id + '" type="button"' + (subscribed ? ' disabled aria-pressed="true"' : ' aria-pressed="false"') + '>' + (subscribed ? 'Đã đăng ký nhận tin' : 'Nhận thông báo') + '</button></div>';
     }).join('') : '<p class="empty-note">Hiện chưa có sản phẩm nào được lên lịch ra mắt. Hãy quay lại sau nhé.</p>';
   }).catch(function () { dropgrid.innerHTML = '<p class="empty-note">Không tải được danh sách sản phẩm sắp ra mắt. Vui lòng thử lại.</p>'; });
   document.addEventListener('click', async function (e) {
     var b = e.target.closest('.notifybtn'); if (!b || b.disabled) return;
     await authPromise;
     if (!user) { openAccount('Vui lòng đăng nhập để nhận thông báo khi sản phẩm ra mắt.'); return; }
-    try { await api('POST', '/drops/' + b.dataset.id + '/subscribe'); b.textContent = 'Đã đăng ký nhận tin'; b.classList.add('done'); b.disabled = true; }
+    try {
+      await api('POST', '/drops/' + b.dataset.id + '/subscribe');
+      b.textContent = 'Đã đăng ký nhận tin'; b.classList.add('done'); b.disabled = true; b.setAttribute('aria-pressed', 'true');
+    }
     catch (_) { b.textContent = 'Không thể đăng ký. Vui lòng thử lại.'; }
   });
 
