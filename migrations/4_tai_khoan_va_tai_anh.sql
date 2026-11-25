@@ -1,5 +1,5 @@
 -- Adds: personal details on accounts, Google sign-in, shipping snapshot on orders, and file-upload support for product photos.
--- Run ONCE, after 0003:  npx wrangler d1 execute flex-db --remote --file=migrations/0004_accounts_uploads.sql
+-- Run ONCE, after 0003:  npx wrangler d1 execute flex-db --remote --file=migrations/0004_tai_khoan_va_tai_anh.sql
 
 ALTER TABLE users ADD COLUMN phone       TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN address     TEXT NOT NULL DEFAULT '';

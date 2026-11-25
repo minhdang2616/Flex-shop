@@ -1,0 +1,25 @@
+-- Refresh dimensions and file sizes for the 24 high-resolution images replacing the small thumbnails.
+UPDATE product_images SET size_bytes=88200,width=1080,height=1440 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-53307') AND url='https://flex-shop.pages.dev/img/dataset/myntra-53307.webp';
+UPDATE product_images SET size_bytes=507666,width=1800,height=2400 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-10482') AND url='https://flex-shop.pages.dev/img/dataset/myntra-10482.webp';
+UPDATE product_images SET size_bytes=189476,width=1080,height=1440 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-6005') AND url='https://flex-shop.pages.dev/img/dataset/myntra-6005.webp';
+UPDATE product_images SET size_bytes=284650,width=1800,height=2400 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-6478') AND url='https://flex-shop.pages.dev/img/dataset/myntra-6478.webp';
+UPDATE product_images SET size_bytes=87636,width=1080,height=1440 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-38154') AND url='https://flex-shop.pages.dev/img/dataset/myntra-38154.webp';
+UPDATE product_images SET size_bytes=247212,width=1800,height=2400 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-19475') AND url='https://flex-shop.pages.dev/img/dataset/myntra-19475.webp';
+UPDATE product_images SET size_bytes=224862,width=1800,height=2400 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-41348') AND url='https://flex-shop.pages.dev/img/dataset/myntra-41348.webp';
+UPDATE product_images SET size_bytes=151690,width=1800,height=2400 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-13490') AND url='https://flex-shop.pages.dev/img/dataset/myntra-13490.webp';
+UPDATE product_images SET size_bytes=86496,width=1080,height=1440 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-21148') AND url='https://flex-shop.pages.dev/img/dataset/myntra-21148.webp';
+UPDATE product_images SET size_bytes=78504,width=1080,height=1440 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-43326') AND url='https://flex-shop.pages.dev/img/dataset/myntra-43326.webp';
+UPDATE product_images SET size_bytes=359902,width=1800,height=2400 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-11032') AND url='https://flex-shop.pages.dev/img/dataset/myntra-11032.webp';
+UPDATE product_images SET size_bytes=64334,width=1080,height=1440 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-46121') AND url='https://flex-shop.pages.dev/img/dataset/myntra-46121.webp';
+UPDATE product_images SET size_bytes=159506,width=1800,height=2400 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-11370') AND url='https://flex-shop.pages.dev/img/dataset/myntra-11370.webp';
+UPDATE product_images SET size_bytes=105964,width=1080,height=1440 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-58561') AND url='https://flex-shop.pages.dev/img/dataset/myntra-58561.webp';
+UPDATE product_images SET size_bytes=166588,width=1080,height=1440 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-59896') AND url='https://flex-shop.pages.dev/img/dataset/myntra-59896.webp';
+UPDATE product_images SET size_bytes=106270,width=1800,height=2400 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-25037') AND url='https://flex-shop.pages.dev/img/dataset/myntra-25037.webp';
+UPDATE product_images SET size_bytes=139084,width=1800,height=2400 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-38247') AND url='https://flex-shop.pages.dev/img/dataset/myntra-38247.webp';
+UPDATE product_images SET size_bytes=116388,width=1800,height=2400 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-3854') AND url='https://flex-shop.pages.dev/img/dataset/myntra-3854.webp';
+UPDATE product_images SET size_bytes=65482,width=1080,height=1440 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-34028') AND url='https://flex-shop.pages.dev/img/dataset/myntra-34028.webp';
+UPDATE product_images SET size_bytes=26604,width=1080,height=1440 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-34159') AND url='https://flex-shop.pages.dev/img/dataset/myntra-34159.webp';
+UPDATE product_images SET size_bytes=109350,width=1800,height=2400 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-39320') AND url='https://flex-shop.pages.dev/img/dataset/myntra-39320.webp';
+UPDATE product_images SET size_bytes=169866,width=1800,height=2400 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-38500') AND url='https://flex-shop.pages.dev/img/dataset/myntra-38500.webp';
+UPDATE product_images SET size_bytes=119626,width=1080,height=1440 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-29166') AND url='https://flex-shop.pages.dev/img/dataset/myntra-29166.webp';
+UPDATE product_images SET size_bytes=140362,width=1800,height=2400 WHERE product_id=(SELECT id FROM products WHERE sku='DATA-MYNTRA-38992') AND url='https://flex-shop.pages.dev/img/dataset/myntra-38992.webp';

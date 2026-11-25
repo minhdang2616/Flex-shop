@@ -1,4 +1,3 @@
--- Sample catalog + drops. Safe to run once on an empty database.
 INSERT INTO products (sku,name,department,category,price_cents,stock,status,tag,color,featured,created_at,updated_at) VALUES
 ('FX-U-TEE','Motion Tee','Unisex','Tops',4200,120,'active','','red',1,strftime('%s','now'),strftime('%s','now')),
 ('FX-U-JOG','Flex Joggers','Unisex','Bottoms',7800,64,'active','New','blue',1,strftime('%s','now'),strftime('%s','now')),

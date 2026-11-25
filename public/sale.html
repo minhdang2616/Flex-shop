@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Giảm giá — Flex</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="theme-color" content="#111111">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>.sale-section{padding-top:32px;padding-bottom:72px}.sale-filters{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:26px}.sale-filters label{display:grid;gap:6px;font-size:13px;font-weight:600}.sale-filters select{min-width:190px;padding:11px 14px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--ink);font:inherit}.sale-empty-state{grid-column:1/-1;padding:48px 24px;text-align:center;background:var(--g100);border-radius:12px}.sale-empty-state h2{margin:0 0 8px;font-size:24px}.sale-empty-state p{color:var(--text2);margin:0 0 20px}.sale-empty-state .cta{white-space:normal}.sale-tag{color:var(--red);font-weight:700}.price del,.pdp-price del{font-size:.88em;color:var(--text2);font-weight:400;margin-right:6px}.sale-price{color:var(--red)}.tag.sale-tag{background:var(--red);color:#fff}@media(max-width:600px){.sale-section{padding-top:20px}.sale-filters{gap:10px}.sale-filters label,.sale-filters select{width:100%}.sale-empty-state{padding:32px 16px}}</style>
+</head>
+<body>
+<header>
+  <div class="utilitybar">
+    <div class="wrap utility-wrap">
+      <a href="index.html#contact">Liên hệ</a>
+      <a href="index.html" id="signInLink">Đăng nhập</a>
+      <a href="register.html" id="registerLink">Đăng ký</a>
+    </div>
+  </div>
+  <nav class="wrap">
+    <a class="logo" href="index.html">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M2 22L11 2H22L13 22H2Z" fill="currentColor"/>
+        <path d="M14 22L21 7" stroke="#FF3B2E" stroke-width="3"/>
+      </svg>
+      <span>Flex</span>
+    </a>
+    <ul class="navlinks">
+      <li><a href="index.html#shop">Mới &amp; Nổi bật</a></li>
+      <li class="has-mega">
+        <a href="men.html">Nam</a>
+        <div class="megapanel">
+          <div class="mega-col">
+            <h4>Mua theo danh mục</h4>
+            <a href="men.html#tops">Áo</a>
+            <a href="men.html#bottoms">Quần</a>
+            <a href="men.html#outerwear">Áo khoác</a>
+            <a href="men.html">Xem tất cả đồ nam</a>
+          </div>
+        </div>
+      </li>
+      <li class="has-mega">
+        <a href="women.html">Nữ</a>
+        <div class="megapanel">
+          <div class="mega-col">
+            <h4>Mua theo danh mục</h4>
+            <a href="women.html#tops">Áo</a>
+            <a href="women.html#bottoms">Quần</a>
+            <a href="women.html#outerwear">Áo khoác</a>
+            <a href="women.html">Xem tất cả đồ nữ</a>
+          </div>
+        </div>
+      </li>
+      <li class="has-mega">
+        <a href="kids.html">Trẻ em</a>
+        <div class="megapanel">
+          <div class="mega-col">
+            <h4>Mua theo danh mục</h4>
+            <a href="kids.html#tops">Áo</a>
+            <a href="kids.html#bottoms">Quần</a>
+            <a href="kids.html#outerwear">Áo khoác</a>
+            <a href="kids.html">Xem tất cả đồ trẻ em</a>
+          </div>
+        </div>
+      </li>
+      <li><a href="upcoming.html">Sắp ra mắt</a></li>
+      <li><a href="sale.html">Giảm giá</a></li>
+    </ul>
+    <label class="searchbox">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="2"/></svg>
+      <input type="search" placeholder="Tìm kiếm" aria-label="Tìm kiếm sản phẩm">
+    </label>
+    <div class="navicons">
+      <button class="iconbtn" id="accountBtn" aria-label="Tài khoản">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <button class="iconbtn theme-toggle" id="themeBtn" type="button" aria-label="Chuyển sang giao diện tối" title="Đổi giao diện">☾</button>
+      <button class="iconbtn" id="cartBtn" aria-label="Giỏ hàng, 0 sản phẩm">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M3 4h2l2.4 12.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L21 8H6" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="21" r="1.4" fill="currentColor"/><circle cx="18" cy="21" r="1.4" fill="currentColor"/></svg>
+        <span class="badge" id="cartBadge" hidden>0</span>
+      </button>
+      <button class="navtoggle" id="navToggle" aria-label="Mở menu" aria-expanded="false">☰</button>
+    </div>
+  </nav>
+</header>
+<main id="top">
+  <section class="pagehero sale-hero" data-page-hero-tag="Sale"><img class="pagehero-media" alt="" aria-hidden="true" loading="lazy"><div class="wrap"><h1 class="display">SẢN PHẨM GIẢM GIÁ</h1><p>Khám phá các sản phẩm đang ưu đãi và lọc theo đối tượng hoặc danh mục.</p></div></section>
+  <section class="wrap sale-section"><div class="sale-filters"><label for="saleDepartment">Dành cho<select id="saleDepartment"><option value="">Tất cả</option><option value="Men">Nam</option><option value="Women">Nữ</option><option value="Kids">Trẻ em</option></select></label><label for="saleCategory">Danh mục<select id="saleCategory"><option value="">Tất cả danh mục</option><option value="Tops">Áo</option><option value="Bottoms">Quần</option><option value="Outerwear">Áo khoác</option></select></label></div><div class="grid" id="saleGrid"></div></section>
+</main>
+<footer>
+  <div class="wrap foot-bottom">
+    <span>© 2026 Flex. Đã đăng ký bản quyền.</span>
+    <span>Sẵn sàng chuyển động.</span>
+  </div>
+</footer>
+<div class="overlay" id="overlay"></div>
+<div class="modal" id="accountModal" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
+  <button class="closebtn" id="closeAccount" aria-label="Close">✕</button>
+  <h2 id="accountTitle">Log in</h2>
+  <div id="accountInfo" hidden>
+    <p id="accountHello"></p>
+    <button class="cta dark" id="logoutBtn" type="button">Sign out</button>
+  </div>
+  <div id="authPanel">
+  <p class="authnote" id="authNote" hidden></p>
+  <form class="authform active" id="loginForm">
+    <div class="field"><label for="lusername">Tên đăng nhập</label><input id="lusername" type="text" autocomplete="username" required></div>
+    <div class="field"><label for="lpass">Mật khẩu</label><input id="lpass" type="password" autocomplete="current-password" required></div>
+    <button class="cta dark" type="submit" style="width:100%;text-align:center;">Log in</button>
+    <p class="formmsg" id="loginMsg" role="alert"></p>
+  </form>
+  <div class="divider"><span>Quick sign-in / sign-up</span></div>
+  <a class="gbtn" id="googleLogin" href="/api/auth/google/start"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Continue with Google</span></a>
+  </div>
+</div>
+
+<div class="drawer" id="cartDrawer" role="dialog" aria-modal="true" aria-labelledby="cartTitle">
+  <div class="drawer-head">
+    <h2 id="cartTitle">Your bag</h2>
+    <button class="closebtn" id="closeCart" aria-label="Đóng" style="position:static;">✕</button>
+  </div>
+  <div class="cart-items" id="cartItems"><p class="cart-empty">Your bag is empty.</p></div>
+  <div class="drawer-foot">
+    <div class="subtotal"><span>Subtotal</span><span id="cartSubtotal">0 ₫</span></div>
+    <button class="cta dark" id="checkoutBtn" style="width:100%;text-align:center;">Tiếp tục thanh toán</button>
+  </div>
+</div>
+<script src="lang.js"></script>
+<script src="script.js?v=cart-product-link-20261103"></script>
+</body>
+</html>
