@@ -116,7 +116,7 @@ main{overflow-x:hidden;}
 .dropcard p{color:var(--text2);margin:0;font-size:14px;}
 .notifybtn{background:var(--ink);color:var(--white);border:none;border-radius:999px;font-weight:600;font-size:13px;padding:11px 18px;cursor:pointer;margin-top:8px;align-self:flex-start;transition:background 150ms;}
 .notifybtn:hover,.notifybtn:focus-visible{background:var(--dark);}
-.notifybtn.done{background:var(--volt);color:var(--ink);}
+.notifybtn.done{background:#e3f2e8;color:#17633a;cursor:default;}
 
 /* PHILOSOPHY */
 .philosophy{padding:92px 0;border-bottom:1px solid var(--border);}
