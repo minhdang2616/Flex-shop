@@ -169,7 +169,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     $('accountTitle').textContent = user ? 'Your account' : 'Log in';
   }
-  async function logout() { try { await api('POST', '/auth/logout'); } catch (e) {} user = null; cart = []; lastOrder = ''; paintUser(); renderCart(); }
+  async function logout() {
+    try { await api('POST', '/auth/logout'); } catch (e) {}
+    user = null; cart = []; lastOrder = ''; clearPending();
+    location.reload();
+  }
   $('signInLink').addEventListener('click', function (e) { e.preventDefault(); if (user) { logout(); closeAll(); } else openAccount(); });
   $('logoutBtn').addEventListener('click', function () { logout(); closeAll(); });
   $('accountInfo').addEventListener('click', async function (e) {
