@@ -343,7 +343,7 @@ document.addEventListener('DOMContentLoaded', function () {
   if (dropgrid) api('GET', '/drops').then(function (r) {
     var colors = ['red', 'blue', 'volt', 'ink'];
     dropgrid.innerHTML = r.drops.length ? r.drops.map(function (d, i) {
-      return '<div class="dropcard"><div class="swatch" style="--swatch-c:var(--' + colors[i % 4] + ');"></div><span class="dropdate">Drops ' + esc(d.release_date) + '</span><h3>' + esc(d.name) + '</h3><p>' + esc(d.description) + '</p><button class="notifybtn' + (d.subscribed ? ' done' : '') + '" data-id="' + d.id + '"' + (d.subscribed ? ' disabled' : '') + '>' + (d.subscribed ? 'You\\'re on the list' : 'Notify me') + '</button></div>';
+      return '<div class="dropcard"><div class="swatch" style="--swatch-c:var(--' + colors[i % 4] + ');"></div><span class="dropdate">Drops ' + esc(d.release_date) + '</span><h3>' + esc(d.name) + '</h3><p>' + esc(d.description) + '</p><button class="notifybtn" data-id="' + d.id + '">Notify me</button></div>';
     }).join('') : '<p class="empty-note">No drops scheduled right now. Check back soon.</p>';
   }).catch(function () { dropgrid.innerHTML = '<p class="empty-note">We could not load upcoming drops.</p>'; });
   document.addEventListener('click', async function (e) {
